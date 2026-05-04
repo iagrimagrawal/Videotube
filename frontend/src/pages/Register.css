@@ -1,5 +1,6 @@
 .register-wrapper {
   min-height: 100vh;
+  width: 100vw;
   background-color: #0a0a0a;
   display: flex;
   align-items: center;
@@ -9,7 +10,9 @@
 
 .register-container {
   width: 100%;
-  max-width: 28rem;
+  max-width: 500px;
+  background-color: #111111;
+  padding: 2rem;
 }
 
 .register-header {

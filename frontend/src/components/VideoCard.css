@@ -1,92 +1,325 @@
 .video-card {
-  text-decoration: none;
-  color: inherit;
-}
-
-.video-card-container {
-  cursor: pointer;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
+.video-card:hover {
+  transform: translateY(-4px);
+}
+
+/* Thumbnail Section */
 .video-thumbnail-wrapper {
   position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  background: #e5e5e5;
+  border-radius: 8px;
   overflow: hidden;
-  border-radius: 0.5rem;
-  background-color: #1a1a1a;
-  height: 10rem;
   margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .video-thumbnail-img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   transition: transform 0.2s ease;
 }
 
-.video-card-container:hover .video-thumbnail-img {
+.video-card:hover .video-thumbnail-img {
   transform: scale(1.05);
 }
 
+.video-thumbnail-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 2rem;
+}
+
+.video-thumbnail-placeholder svg {
+  width: 60px;
+  height: 60px;
+}
+
+/* Overlay on Hover */
 .video-overlay {
   position: absolute;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   transition: opacity 0.2s ease;
+  z-index: 10;
 }
 
-.video-card-container:hover .video-overlay {
+.video-card:hover .video-overlay {
   opacity: 1;
 }
 
-.video-play-icon {
-  color: white;
-  font-size: 2rem;
+.play-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
 }
 
+.video-card:hover .play-icon {
+  background: #fff;
+  transform: scale(1.1);
+}
+
+.play-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #f1425d;
+  margin-left: 2px;
+}
+
+/* Duration Badge */
 .video-duration {
   position: absolute;
-  bottom: 0.5rem;
-  right: 0.5rem;
-  background-color: rgba(0, 0, 0, 0.8);
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
   font-size: 0.75rem;
+  font-weight: 600;
+  z-index: 20;
+  min-width: 40px;
+  text-align: center;
 }
 
-.video-info {
+/* Info Section */
+.video-card-info {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1;
 }
 
+.video-info-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  position: relative;
+}
+
+.channel-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  object-fit: cover;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.channel-avatar:hover {
+  opacity: 0.8;
+}
+
+.video-text-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* Title */
 .video-title {
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #030303;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  line-height: 1.4;
   transition: color 0.2s ease;
 }
 
-.video-card-container:hover .video-title {
-  color: #dc2626;
+.video-title:hover {
+  color: #606060;
 }
 
-.video-channel {
-  font-size: 0.875rem;
-  color: #9ca3af;
+/* Channel Link */
+.video-channel-link {
+  font-size: 0.85rem;
+  color: #606060;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+.video-channel-link:hover {
+  color: #030303;
+}
+
+/* Stats */
 .video-stats {
   display: flex;
-  font-size: 0.75rem;
-  color: #6b7280;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #606060;
+}
+
+.stat-separator {
+  margin: 0 0.25rem;
+}
+
+/* Menu Button */
+.video-menu-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #030303;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.video-card:hover .video-menu-btn {
+  opacity: 1;
+}
+
+.video-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.video-menu-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .video-title {
+    font-size: 0.9rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .channel-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .video-channel-link {
+    font-size: 0.8rem;
+  }
+
+  .video-stats {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .video-card {
+    transform: none;
+  }
+
+  .video-card:hover {
+    transform: none;
+  }
+
+  .video-thumbnail-img {
+    transform: none !important;
+  }
+
+  .video-title {
+    font-size: 0.85rem;
+    -webkit-line-clamp: 2;
+  }
+
+  .video-channel-link {
+    font-size: 0.75rem;
+  }
+
+  .video-stats {
+    font-size: 0.7rem;
+  }
+
+  .video-menu-btn {
+    display: none;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .video-thumbnail-wrapper {
+    background: #303030;
+  }
+
+  .video-title {
+    color: #fff;
+  }
+
+  .video-title:hover {
+    color: #ccc;
+  }
+
+  .video-channel-link,
+  .video-stats {
+    color: #999;
+  }
+
+  .video-channel-link:hover {
+    color: #fff;
+  }
+
+  .video-menu-btn {
+    color: #fff;
+  }
+
+  .video-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
