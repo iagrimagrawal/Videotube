@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import apiClient from '../lib/api'
 import './Navbar.css'
 
 export default function Navbar({ onToggleSidebar, sidebarOpen }) {
@@ -62,16 +63,12 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
 
   const performSearch = async (query) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/videos/search?q=${encodeURIComponent(query)}`)
-      if (response.ok) {
-        const data = await response.json()
-        // Assuming API returns data in a specific format, adjust based on your backend
-        const suggestions = (data.data || []).slice(0, 5).map(video => ({
-          id: video._id,
-          title: video.title
-        }))
-        setSearchSuggestions(suggestions)
-      }
+      const response = await apiClient.get(`/videos/search?q=${encodeURIComponent(query)}`)
+      const suggestions = (response.data.data || []).slice(0, 5).map(video => ({
+        id: video._id,
+        title: video.title
+      }))
+      setSearchSuggestions(suggestions)
     } catch (error) {
       console.error('Search error:', error)
       // Show mock suggestions on error
@@ -111,6 +108,21 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
     signOut()
     navigate('/login')
     setShowUserDropdown(false)
+  }
+
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm('Are you sure you want to delete your account? This action cannot be undone.')
+    if (!confirmed) return
+
+    try {
+      await apiClient.delete('/users/delete-account')
+      signOut()
+      navigate('/login')
+      setShowUserDropdown(false)
+    } catch (error) {
+      console.error('Delete account error:', error)
+      alert('Error deleting account. Please try again.')
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -300,6 +312,17 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
                   <line x1="3" y1="18" x2="3.01" y2="18" strokeWidth="2" />
                 </svg>
                 <div>Playlists</div>
+              </button>
+              <div className="dropdown-divider"></div>
+              <button
+                className="dropdown-item delete-account-btn"
+                onClick={handleDeleteAccount}
+              >
+                <svg className="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="3 6 5 6 21 6" strokeWidth="2" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                <div>Delete Account</div>
               </button>
               <div className="dropdown-divider"></div>
               <button
