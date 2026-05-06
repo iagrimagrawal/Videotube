@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import VideoCard from '../components/VideoCard'
+import apiClient from '../lib/api'
 import './Home.css'
+
+const HOME_VIDEO_LIMIT = 12
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -31,28 +34,48 @@ export default function Home() {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/videos?limit=12`)
-      if (response.ok) {
-        const data = await response.json()
-        setVideos(data.data || [])
-      } else {
-        throw new Error('Failed to fetch videos')
-      }
+      const response = await apiClient.get('/videos', {
+        params: {
+          limit: HOME_VIDEO_LIMIT,
+          sortBy: filter === 'trending' ? 'views' : 'createdAt',
+          sortType: 'desc',
+        },
+      })
+
+      const uploadedVideos = normalizeUploadedVideos(response.data.data)
+      const mockVideos = generateMockVideos(Math.max(HOME_VIDEO_LIMIT - uploadedVideos.length, 0))
+
+      setVideos([...uploadedVideos, ...mockVideos])
     } catch (err) {
       console.error('Error fetching videos:', err)
-      // Show mock data on error
-      setVideos(generateMockVideos(12))
+      setVideos(generateMockVideos(HOME_VIDEO_LIMIT))
     } finally {
       setIsLoading(false)
     }
   }
 
+  const normalizeUploadedVideos = (data) => {
+    const sourceVideos = Array.isArray(data) ? data : data?.videos || data?.docs || []
+
+    return sourceVideos
+      .filter(Boolean)
+      .sort((a, b) => {
+        const firstDate = new Date(a.createdAt || a.uploadedAt || 0).getTime()
+        const secondDate = new Date(b.createdAt || b.uploadedAt || 0).getTime()
+        return secondDate - firstDate
+      })
+      .map((video) => ({
+        ...video,
+        uploadedAt: video.createdAt || video.uploadedAt,
+      }))
+  }
+
   const generateMockVideos = (count) => {
     return Array.from({ length: count }, (_, i) => ({
-      _id: `video-${i + 1}`,
-      title: `Amazing Video ${i + 1}`,
+      _id: `mock-video-${i + 1}`,
+      title: `Suggested Video ${i + 1}`,
       description: `This is an awesome video featuring great content`,
-      thumbnail: `https://picsum.photos/320/180?random=${i + 1}`,
+      thumbnail: `https://picsum.photos/seed/home-suggestion-${i + 1}/320/180`,
       duration: `${Math.floor(Math.random() * 60) + 1}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
       views: `${Math.floor(Math.random() * 1000000) + 1000}`,
       uploadedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),

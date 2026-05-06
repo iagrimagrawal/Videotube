@@ -141,6 +141,7 @@ export default function Upload() {
     try {
       const response = await apiClient.post('/videos', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 0,
         onUploadProgress: (progressEvent) => {
           if (!progressEvent.total) return
           setUploadProgress(Math.round((progressEvent.loaded * 100) / progressEvent.total))
