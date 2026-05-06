@@ -45,11 +45,18 @@ export const useAuth = () => {
       })
 
       const { data } = response.data
-      // Note: Backend sets accessToken and refreshToken as cookies
-      // Frontend can retrieve from cookies or from headers
-      localStorage.setItem('user', JSON.stringify(data))
-      setUser(data)
-      return data
+      const registeredUser = data.loginUser || data
+
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken)
+      }
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken)
+      }
+
+      localStorage.setItem('user', JSON.stringify(registeredUser))
+      setUser(registeredUser)
+      return registeredUser
     } catch (error) {
       throw new Error(error.response?.data?.message || 'Registration failed')
     } finally {
