@@ -5,6 +5,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Watch from './pages/Watch'
+import Upload from './pages/Upload'
 import './App.css'
 
 export default function App() {
@@ -50,8 +51,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/watch/:id" element={<Watch />} />
-              {/* <Route path="/search" element={<Search />} />
               <Route path="/upload" element={<Upload />} />
+              {/* <Route path="/search" element={<Search />} />
               <Route path="/channel/:id" element={<Channel />} />
               <Route path="/history" element={<History />} />
               <Route path="/playlists" element={<Playlists />} />
