@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { formatTimeAgo } from '../lib/time'
 import './VideoCard.css'
 
 export default function VideoCard({ video }) {
@@ -12,21 +13,6 @@ export default function VideoCard({ video }) {
     if (num < 1000) return `${num}`
     if (num < 1000000) return `${(num / 1000).toFixed(1)}K`
     return `${(num / 1000000).toFixed(1)}M`
-  }
-
-  const formatDate = (date) => {
-    if (!date) return 'Recently'
-    const d = new Date(date)
-    const now = new Date()
-    const diff = now.getTime() - d.getTime()
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-
-    if (days === 0) return 'Today'
-    if (days === 1) return 'Yesterday'
-    if (days < 7) return `${days}d ago`
-    if (days < 30) return `${Math.floor(days / 7)}w ago`
-    if (days < 365) return `${Math.floor(days / 30)}m ago`
-    return `${Math.floor(days / 365)}y ago`
   }
 
   const formatDuration = (duration) => {
@@ -113,7 +99,7 @@ export default function VideoCard({ video }) {
             <div className="video-stats">
               <span>{formatViews(video.views)} views</span>
               <span className="stat-separator">•</span>
-              <span>{formatDate(video.uploadedAt)}</span>
+              <span>{formatTimeAgo(video.uploadedAt || video.createdAt)}</span>
             </div>
           </div>
 

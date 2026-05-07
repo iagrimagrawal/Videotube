@@ -1,0 +1,292 @@
+.tweets-container {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #fff;
+}
+
+.tweets-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  width: 100%;
+}
+
+.tweets-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 260px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.tweets-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 20px 28px 18px;
+  border-bottom: 1px solid #e5e5e5;
+  background: #fff;
+}
+
+.tweets-header h1 {
+  margin: 0 0 4px;
+  color: #030303;
+  font-size: 1.65rem;
+  line-height: 1.2;
+}
+
+.tweets-header span {
+  color: #606060;
+  font-size: 0.95rem;
+}
+
+.tweets-feed {
+  width: min(760px, 100%);
+  padding: 20px 28px 40px;
+}
+
+.tweet-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.tweet-avatar,
+.tweet-avatar-skeleton {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+.tweet-avatar {
+  object-fit: cover;
+}
+
+.tweet-body {
+  min-width: 0;
+}
+
+.tweet-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.tweet-meta strong {
+  color: #030303;
+  font-size: 0.98rem;
+}
+
+.tweet-meta span {
+  color: #606060;
+  font-size: 0.9rem;
+}
+
+.tweet-body p {
+  margin: 0;
+  color: #030303;
+  font-size: 1rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tweet-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.tweet-actions button {
+  min-width: 44px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 999px;
+  color: #606060;
+  background: #f2f2f2;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.tweet-actions button:hover {
+  background: #e5e5e5;
+  color: #030303;
+}
+
+.tweet-actions button.active {
+  color: #2f80ed;
+  background: #e7f1ff;
+}
+
+.tweet-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.tweets-notice,
+.tweets-empty {
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.tweets-notice {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  color: #606060;
+  font-size: 0.92rem;
+}
+
+.tweets-empty {
+  padding: 38px 20px;
+  text-align: center;
+}
+
+.tweets-empty h2 {
+  margin: 0 0 8px;
+  color: #030303;
+  font-size: 1.35rem;
+}
+
+.tweets-empty p {
+  margin: 0;
+  color: #606060;
+}
+
+.tweet-card-skeleton {
+  animation: tweetPulse 1.5s ease-in-out infinite;
+}
+
+.tweet-avatar-skeleton,
+.tweet-skeleton-line {
+  background: #e5e5e5;
+}
+
+.tweet-skeleton-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.tweet-skeleton-line {
+  width: 100%;
+  height: 14px;
+  border-radius: 999px;
+}
+
+.tweet-skeleton-line.short {
+  width: 34%;
+}
+
+.tweet-skeleton-line.medium {
+  width: 68%;
+}
+
+@keyframes tweetPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (max-width: 768px) {
+  .tweets-main {
+    margin-left: 0;
+  }
+
+  .tweets-header {
+    padding: 16px 16px 14px;
+  }
+
+  .tweets-feed {
+    padding: 8px 16px 32px;
+  }
+
+  .tweet-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .tweet-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+    margin-top: 2px;
+  }
+
+  .tweet-avatar,
+  .tweet-avatar-skeleton {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .tweets-container,
+  .tweets-main,
+  .tweets-header {
+    background: #212121;
+  }
+
+  .tweets-header,
+  .tweet-card {
+    border-bottom-color: #303030;
+  }
+
+  .tweets-header h1,
+  .tweet-meta strong,
+  .tweet-body p,
+  .tweets-empty h2 {
+    color: #fff;
+  }
+
+  .tweets-header span,
+  .tweet-meta span,
+  .tweets-empty p,
+  .tweets-notice {
+    color: #aaa;
+  }
+
+  .tweets-notice,
+  .tweets-empty {
+    border-color: #303030;
+    background: #242424;
+  }
+
+  .tweet-avatar-skeleton,
+  .tweet-skeleton-line {
+    background: #303030;
+  }
+
+  .tweet-actions button {
+    color: #aaa;
+    background: #303030;
+  }
+
+  .tweet-actions button:hover {
+    color: #fff;
+    background: #404040;
+  }
+
+  .tweet-actions button.active {
+    color: #8ecfff;
+    background: #213141;
+  }
+}

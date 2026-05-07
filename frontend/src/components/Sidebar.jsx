@@ -50,13 +50,13 @@ export default function Sidebar({ isOpen, onClose }) {
               <span>Home</span>
             </button>
             <button
-              className={`sidebar-item ${isActive('/shorts') ? 'active' : ''}`}
-              onClick={() => handleNavigate('/shorts')}
+              className={`sidebar-item ${isActive('/tweets') ? 'active' : ''}`}
+              onClick={() => handleNavigate('/tweets')}
             >
               <svg className="sidebar-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M18 4H6c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H6V6h12v12z" />
+                <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 4v-4H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm2 5v2h12V9H6zm0 4v2h8v-2H6z" />
               </svg>
-              <span>Shorts</span>
+              <span>Tweets</span>
             </button>
           </nav>
         </div>

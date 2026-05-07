@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
 import apiClient from '../lib/api'
+import { formatTimeAgo } from '../lib/time'
 import './Watch.css'
 
 const sampleVideoUrl =
@@ -667,7 +668,7 @@ export default function Watch() {
           <div className="watch-description">
             <strong>
               {formatViews(interactionStats.views)} views
-              <span> 2 weeks ago</span>
+              <span> {formatTimeAgo(video.createdAt || video.uploadedAt)}</span>
             </strong>
             <p>{video.description}</p>
           </div>
