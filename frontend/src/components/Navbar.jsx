@@ -213,7 +213,7 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
             aria-label="Create menu"
           >
             <svg className="create-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
+              <path d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4z" />
             </svg>
           </button>
 
@@ -225,7 +225,9 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
                 onClick={() => handleCreateClick('/upload')}
               >
                 <svg className="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path d="M12 5v14M5 12h14" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M15 10l5-3v10l-5-3v-4z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <rect x="3" y="6" width="12" height="12" rx="2" strokeWidth="2" />
+                  <path d="M9 15V9M6 12h6" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <div>
                   <div className="dropdown-title">Upload Video</div>
@@ -234,15 +236,15 @@ export default function Navbar({ onToggleSidebar, sidebarOpen }) {
               </button>
               <button
                 className="dropdown-item"
-                onClick={() => handleCreateClick('/create-post')}
+                onClick={() => handleCreateClick('/create-tweet')}
               >
                 <svg className="dropdown-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" strokeWidth="2" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" strokeWidth="2" />
                 </svg>
                 <div>
-                  <div className="dropdown-title">Create Post</div>
-                  <div className="dropdown-desc">Share a post with your subscribers</div>
+                  <div className="dropdown-title">Create Tweet</div>
+                  <div className="dropdown-desc">Share a tweet with everyone</div>
                 </div>
               </button>
             </div>

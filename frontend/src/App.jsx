@@ -6,6 +6,9 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Watch from './pages/Watch'
 import Upload from './pages/Upload'
+import Tweets from './pages/Tweets'
+import CreateTweet from './pages/CreateTweet'
+import Channel from './pages/Channel'
 import './App.css'
 
 export default function App() {
@@ -50,6 +53,10 @@ export default function App() {
           <div className="main-layout">
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/tweets" element={<Tweets />} />
+              <Route path="/create-tweet" element={<CreateTweet />} />
+              <Route path="/channel" element={<Channel />} />
+              <Route path="/channel/:channelId" element={<Channel />} />
               <Route path="/watch/:id" element={<Watch />} />
               <Route path="/upload" element={<Upload />} />
               {/* <Route path="/search" element={<Search />} />

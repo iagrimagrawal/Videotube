@@ -78,7 +78,7 @@ export default function Home() {
       thumbnail: `https://picsum.photos/seed/home-suggestion-${i + 1}/320/180`,
       duration: `${Math.floor(Math.random() * 60) + 1}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
       views: `${Math.floor(Math.random() * 1000000) + 1000}`,
-      uploadedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+      uploadedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
       owner: {
         _id: `channel-${i + 1}`,
         username: `Channel${i + 1}`,
