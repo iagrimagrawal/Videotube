@@ -15,6 +15,7 @@ import {
   FaStepForward,
   FaThumbsDown,
   FaThumbsUp,
+  FaTimes,
   FaVolumeUp,
 } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
@@ -170,6 +171,15 @@ const formatViews = (views = 0) => {
   return `${value}`
 }
 
+const formatCount = (count = 0) => {
+  const value = Number.parseInt(count, 10) || 0
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+  return `${value}`
+}
+
+const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value || '')
+
 const normalizeVideo = (video) => ({
   ...mockPlaylist[3],
   ...video,
@@ -198,6 +208,19 @@ export default function Watch() {
   const [playbackRate, setPlaybackRate] = useState(1)
   const [muted, setMuted] = useState(false)
   const [isFullMode, setIsFullMode] = useState(false)
+  const [interactionStats, setInteractionStats] = useState({
+    views: video.views || 0,
+    likeCount: video.likeCount || 0,
+    isLiked: Boolean(video.isLiked),
+    isDisliked: Boolean(video.isDisliked),
+    subscriberCount: video.owner?.subscriberCount || 0,
+    isSubscribed: Boolean(video.isSubscribed),
+    isOwner: false,
+  })
+  const [isTogglingLike, setIsTogglingLike] = useState(false)
+  const [isTogglingSubscription, setIsTogglingSubscription] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
+  const [hasCopiedShareLink, setHasCopiedShareLink] = useState(false)
 
   const playlist = useMemo(() => {
     const hasCurrentVideo = mockPlaylist.some((item) => item._id === video._id)
@@ -209,6 +232,11 @@ export default function Watch() {
   const hasPlaylistContext = Boolean(activeListId || location.state?.fromPlaylist)
   const currentIndex = playlist.findIndex((item) => item._id === video._id)
   const progress = duration > 0 ? Math.min((playedSeconds / duration) * 100, 100) : 0
+  const canUseLiveStats = isObjectId(video._id)
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') return `/watch/${video._id}`
+    return `${window.location.origin}/watch/${video._id}`
+  }, [video._id])
 
   useEffect(() => {
     let isMounted = true
@@ -228,6 +256,15 @@ export default function Watch() {
         if (!isMounted) return
         const nextVideo = normalizeVideo(response.data.data)
         setVideo(nextVideo)
+        setInteractionStats({
+          views: nextVideo.views || 0,
+          likeCount: nextVideo.likeCount || 0,
+          isLiked: Boolean(nextVideo.isLiked),
+          isDisliked: Boolean(nextVideo.isDisliked),
+          subscriberCount: nextVideo.subscriberCount || nextVideo.owner?.subscriberCount || 0,
+          isSubscribed: Boolean(nextVideo.isSubscribed),
+          isOwner: Boolean(nextVideo.isOwner),
+        })
         setDuration(nextVideo.duration || 0)
         setPlayedSeconds(0)
         setPlaying(true)
@@ -248,6 +285,42 @@ export default function Watch() {
   }, [id])
 
   useEffect(() => {
+    if (!canUseLiveStats) {
+      setInteractionStats({
+        views: video.views || 0,
+        likeCount: video.likeCount || 3800,
+        isLiked: Boolean(video.isLiked),
+        isDisliked: Boolean(video.isDisliked),
+        subscriberCount: video.owner?.subscriberCount || 1020000,
+        isSubscribed: Boolean(video.isSubscribed),
+        isOwner: false,
+      })
+      return undefined
+    }
+
+    let isMounted = true
+
+    const fetchStats = async () => {
+      try {
+        const response = await apiClient.get(`/videos/${video._id}/stats`)
+        if (!isMounted) return
+        setInteractionStats((current) => ({
+          ...current,
+          ...response.data.data,
+        }))
+      } catch (error) {
+        // Keep the last known values if a background refresh fails.
+      }
+    }
+
+    const intervalId = window.setInterval(fetchStats, 10000)
+    return () => {
+      isMounted = false
+      window.clearInterval(intervalId)
+    }
+  }, [canUseLiveStats, video._id, video.views, video.likeCount, video.isLiked, video.owner?.subscriberCount, video.isSubscribed])
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullMode(Boolean(document.fullscreenElement))
     }
@@ -255,6 +328,19 @@ export default function Watch() {
     document.addEventListener('fullscreenchange', handleFullscreenChange)
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
+
+  useEffect(() => {
+    if (!isShareOpen) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsShareOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isShareOpen])
 
   const seekToSeconds = (seconds) => {
     const nextTime = Math.max(0, Math.min(seconds, duration || 0))
@@ -300,6 +386,107 @@ export default function Watch() {
       }
     } catch {
       setIsFullMode((current) => !current)
+    }
+  }
+
+  const toggleLike = async () => {
+    if (isTogglingLike) return
+
+    if (!canUseLiveStats) {
+      setInteractionStats((current) => ({
+        ...current,
+        isLiked: !current.isLiked,
+        isDisliked: false,
+        likeCount: Math.max(0, (Number.parseInt(current.likeCount, 10) || 0) + (current.isLiked ? -1 : 1)),
+      }))
+      return
+    }
+
+    setIsTogglingLike(true)
+    try {
+      const response = await apiClient.post(`/like/toggle/v/${video._id}`)
+      setInteractionStats((current) => ({
+        ...current,
+        isLiked: response.data.data.isLiked,
+        isDisliked: false,
+        likeCount: response.data.data.likeCount,
+      }))
+    } catch (error) {
+      console.error('Unable to toggle like:', error)
+    } finally {
+      setIsTogglingLike(false)
+    }
+  }
+
+  const toggleDislike = async () => {
+    if (isTogglingLike) return
+
+    if (!canUseLiveStats) {
+      setInteractionStats((current) => ({
+        ...current,
+        isLiked: false,
+        isDisliked: !current.isDisliked,
+        likeCount: current.isLiked
+          ? Math.max(0, (Number.parseInt(current.likeCount, 10) || 0) - 1)
+          : current.likeCount,
+      }))
+      return
+    }
+
+    if (!interactionStats.isLiked) {
+      setInteractionStats((current) => ({
+        ...current,
+        isDisliked: !current.isDisliked,
+      }))
+      return
+    }
+
+    setIsTogglingLike(true)
+    try {
+      const response = await apiClient.post(`/like/toggle/v/${video._id}`)
+      setInteractionStats((current) => ({
+        ...current,
+        isLiked: false,
+        isDisliked: true,
+        likeCount: response.data.data.likeCount,
+      }))
+    } catch (error) {
+      console.error('Unable to dislike video:', error)
+    } finally {
+      setIsTogglingLike(false)
+    }
+  }
+
+  const toggleSubscription = async () => {
+    const channelId = video.owner?._id
+    if (!channelId || !isObjectId(channelId) || interactionStats.isOwner || isTogglingSubscription) return
+
+    setIsTogglingSubscription(true)
+    try {
+      const response = await apiClient.post(`/subscription/c/${channelId}`)
+      setInteractionStats((current) => ({
+        ...current,
+        isSubscribed: response.data.data.isSubscribed,
+        subscriberCount: response.data.data.subscriberCount,
+      }))
+    } catch (error) {
+      console.error('Unable to toggle subscription:', error)
+    } finally {
+      setIsTogglingSubscription(false)
+    }
+  }
+
+  const openShareDialog = () => {
+    setHasCopiedShareLink(false)
+    setIsShareOpen(true)
+  }
+
+  const copyShareLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setHasCopiedShareLink(true)
+    } catch (error) {
+      console.error('Unable to copy share link:', error)
     }
   }
 
@@ -433,23 +620,41 @@ export default function Watch() {
                   {video.owner.fullName || video.owner.username}
                   <FaCheckCircle />
                 </button>
-                <span>{video.owner.subscribers || '1.02M subscribers'}</span>
+                <span>{formatCount(interactionStats.subscriberCount)} subscribers</span>
               </div>
-              <button className="subscribe-button">Subscribe</button>
+              {!interactionStats.isOwner && (
+                <button
+                  className={`subscribe-button ${interactionStats.isSubscribed ? 'subscribed' : ''}`}
+                  onClick={toggleSubscription}
+                  disabled={isTogglingSubscription || !isObjectId(video.owner?._id)}
+                >
+                  {interactionStats.isSubscribed ? 'Subscribed' : 'Subscribe'}
+                </button>
+              )}
             </div>
 
             <div className="watch-actions">
               <div className="rating-pill">
-                <button aria-label="Like video">
+                <button
+                  className={interactionStats.isLiked ? 'active' : ''}
+                  onClick={toggleLike}
+                  disabled={isTogglingLike}
+                  aria-label={interactionStats.isLiked ? 'Unlike video' : 'Like video'}
+                >
                   <FaThumbsUp />
-                  <span>3.8K</span>
+                  <span>{formatCount(interactionStats.likeCount)}</span>
                 </button>
                 <span className="pill-divider" />
-                <button aria-label="Dislike video">
+                <button
+                  className={interactionStats.isDisliked ? 'active' : ''}
+                  onClick={toggleDislike}
+                  disabled={isTogglingLike}
+                  aria-label={interactionStats.isDisliked ? 'Remove dislike' : 'Dislike video'}
+                >
                   <FaThumbsDown />
                 </button>
               </div>
-              <button className="action-pill">
+              <button className="action-pill" onClick={openShareDialog}>
                 <FaShare />
                 <span>Share</span>
               </button>
@@ -461,7 +666,7 @@ export default function Watch() {
 
           <div className="watch-description">
             <strong>
-              {formatViews(video.views)} views
+              {formatViews(interactionStats.views)} views
               <span> 2 weeks ago</span>
             </strong>
             <p>{video.description}</p>
@@ -539,6 +744,44 @@ export default function Watch() {
           </div>
         </aside>
       </main>
+
+      {isShareOpen && (
+        <div
+          className="share-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setIsShareOpen(false)}
+        >
+          <div
+            className="share-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="share-modal-header">
+              <h2 id="share-modal-title">Share link</h2>
+              <button
+                className="share-modal-close"
+                onClick={() => setIsShareOpen(false)}
+                aria-label="Close share dialog"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="share-link-box">
+              <input
+                type="text"
+                value={shareUrl}
+                readOnly
+                aria-label="Video share link"
+                onFocus={(event) => event.target.select()}
+              />
+              <button onClick={copyShareLink}>{hasCopiedShareLink ? 'Copied' : 'Copy'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
