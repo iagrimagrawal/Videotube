@@ -326,6 +326,17 @@
   background: #f7f7f7;
 }
 
+.subscribe-button.subscribed {
+  color: var(--watch-text);
+  background: var(--watch-surface-soft);
+}
+
+.subscribe-button:disabled,
+.rating-pill button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .watch-actions {
   display: flex;
   align-items: center;
@@ -358,6 +369,10 @@
   font-size: 1rem;
 }
 
+.rating-pill button.active {
+  color: var(--watch-blue);
+}
+
 .pill-divider {
   width: 1px;
   height: 24px;
@@ -385,6 +400,101 @@
 
 .subscribe-button:hover {
   background: #dedede;
+}
+
+.subscribe-button.subscribed:hover {
+  background: var(--watch-surface-hover);
+}
+
+.share-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.share-modal {
+  width: min(528px, 100%);
+  padding: 20px;
+  border: 1px solid var(--watch-border);
+  border-radius: 12px;
+  background: #202020;
+  color: var(--watch-text);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45);
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.share-modal-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.share-modal-close {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  color: var(--watch-text);
+  background: transparent;
+  font-size: 1.15rem;
+}
+
+.share-modal-close:hover {
+  background: var(--watch-surface-hover);
+}
+
+.share-link-box {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #454545;
+  border-radius: 14px;
+  background: #101010;
+}
+
+.share-link-box input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  color: var(--watch-text);
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.share-link-box button {
+  height: 42px;
+  min-width: 76px;
+  padding: 0 18px;
+  border: 1px solid #454545;
+  border-radius: 999px;
+  color: var(--watch-text);
+  background: #181818;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.share-link-box button:hover {
+  background: var(--watch-surface-hover);
 }
 
 .watch-description {
@@ -716,5 +826,20 @@
 
   .up-next-thumb {
     width: 132px;
+  }
+
+  .share-modal {
+    padding: 16px;
+  }
+
+  .share-link-box {
+    min-height: 58px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .share-link-box button {
+    min-width: 68px;
+    padding: 0 14px;
   }
 }
