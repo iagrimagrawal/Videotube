@@ -303,13 +303,24 @@ export default function Channel({ initialTab = 'home' }) {
           ) : (
             <div className="channel-playlist-grid">
               {playlists.map((playlist) => (
-                <article key={playlist._id} className="channel-playlist-card">
+                <article
+                  key={playlist._id}
+                  className="channel-playlist-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/playlists/${playlist._id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      navigate(`/playlists/${playlist._id}`)
+                    }
+                  }}
+                >
                   <div className="channel-playlist-art">
                     <FaListUl />
                     <span>{playlist.videos?.length || playlist.videoCount || 0} videos</span>
                   </div>
                   <strong>{playlist.name}</strong>
-                  <p>{playlist.description}</p>
                 </article>
               ))}
             </div>

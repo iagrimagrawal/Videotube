@@ -287,6 +287,7 @@ export default function Watch() {
   const [savingPlaylistId, setSavingPlaylistId] = useState('')
   const [showNewPlaylistForm, setShowNewPlaylistForm] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('')
   const [creatingPlaylist, setCreatingPlaylist] = useState(false)
   const [playlistDetails, setPlaylistDetails] = useState(null)
   const [playlistVideos, setPlaylistVideos] = useState([])
@@ -782,9 +783,15 @@ export default function Watch() {
   const createPlaylistAndSave = async (event) => {
     event.preventDefault()
     const name = newPlaylistName.trim()
+    const description = newPlaylistDescription.trim()
 
     if (!name) {
       setSaveError('Playlist name is required.')
+      return
+    }
+
+    if (!description) {
+      setSaveError('Playlist description is required.')
       return
     }
 
@@ -799,7 +806,7 @@ export default function Watch() {
     try {
       const response = await apiClient.post('/playlist', {
         name,
-        description: `Saved videos from ${user?.username || 'VideoTube'}`,
+        description,
       })
       const createdPlaylist = response.data.data
 
@@ -816,6 +823,7 @@ export default function Watch() {
       ])
       setShowNewPlaylistForm(false)
       setNewPlaylistName('')
+      setNewPlaylistDescription('')
     } catch (error) {
       console.error('Unable to create playlist:', error)
       setSaveError(error.response?.data?.message || 'Unable to create playlist.')
@@ -1246,8 +1254,26 @@ export default function Watch() {
                   maxLength="100"
                   autoFocus
                 />
+                <textarea
+                  value={newPlaylistDescription}
+                  onChange={(event) => {
+                    setNewPlaylistDescription(event.target.value)
+                    setSaveError('')
+                  }}
+                  placeholder="Playlist description"
+                  maxLength="500"
+                  rows="3"
+                />
                 <div>
-                  <button type="button" onClick={() => setShowNewPlaylistForm(false)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewPlaylistForm(false)
+                      setNewPlaylistName('')
+                      setNewPlaylistDescription('')
+                      setSaveError('')
+                    }}
+                  >
                     Cancel
                   </button>
                   <button type="submit" disabled={creatingPlaylist}>

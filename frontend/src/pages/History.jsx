@@ -5,6 +5,7 @@ import {
   FaEllipsisV,
   FaHistory,
   FaPlay,
+  FaPlus,
   FaRedoAlt,
   FaShare,
   FaTimes,
@@ -14,6 +15,7 @@ import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
+import { useAuthStore } from '../store/authStore'
 import './History.css'
 
 const formatCount = (value = 0) => {
@@ -69,6 +71,7 @@ const normalizeHistory = (history = []) =>
 
 export default function History() {
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [history, setHistory] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -80,6 +83,15 @@ export default function History() {
   const [isClearingHistory, setIsClearingHistory] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [saveVideo, setSaveVideo] = useState(null)
+  const [savePlaylists, setSavePlaylists] = useState([])
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [savingPlaylistId, setSavingPlaylistId] = useState('')
+  const [showNewPlaylistForm, setShowNewPlaylistForm] = useState(false)
+  const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('')
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false)
 
   useEffect(() => {
     const handleResize = () => {
@@ -148,6 +160,161 @@ export default function History() {
       setHasCopiedShareLink(true)
     } catch (copyError) {
       console.error('Unable to copy share link:', copyError)
+    }
+  }
+
+  const playlistHasVideo = (playlistItem, videoId) =>
+    (playlistItem.videos || []).some((playlistVideo) => {
+      const playlistVideoId = typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
+      return playlistVideoId === videoId
+    })
+
+  const normalizeSavePlaylists = (items = [], videoId) =>
+    items
+      .filter((playlistItem) => playlistItem?._id)
+      .map((playlistItem) => ({
+        ...playlistItem,
+        videoCount: playlistItem.videos?.length || playlistItem.videoCount || 0,
+        hasCurrentVideo: playlistHasVideo(playlistItem, videoId),
+      }))
+
+  const fetchSavePlaylists = async (video) => {
+    if (!user?._id || !video?._id) return
+
+    setSaveLoading(true)
+    setSaveError('')
+
+    try {
+      const response = await apiClient.get(`/playlist/user/${user._id}`, {
+        params: { limit: 50 },
+      })
+
+      const basePlaylists = normalizeSavePlaylists(response.data.data || [], video._id)
+      const playlistsWithPreview = await Promise.all(
+        basePlaylists.map(async (playlistItem) => {
+          if (playlistItem.videoCount === 0) return playlistItem
+
+          try {
+            const videosResponse = await apiClient.get(`/playlist/${playlistItem._id}/videos`, {
+              params: { limit: 1 },
+            })
+            return {
+              ...playlistItem,
+              previewVideo: videosResponse.data.data?.[0]?.video,
+            }
+          } catch {
+            return playlistItem
+          }
+        })
+      )
+
+      setSavePlaylists(playlistsWithPreview)
+    } catch (savePlaylistError) {
+      console.error('Unable to load playlists:', savePlaylistError)
+      setSaveError('Unable to load playlists.')
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const openSaveDialog = (video) => {
+    setOpenMenuKey('')
+    setSaveVideo(video)
+    setSaveError('')
+    setShowNewPlaylistForm(false)
+    setNewPlaylistName('')
+    setNewPlaylistDescription('')
+    fetchSavePlaylists(video)
+  }
+
+  const closeSaveDialog = () => {
+    if (creatingPlaylist || savingPlaylistId) return
+
+    setSaveVideo(null)
+    setSaveError('')
+    setShowNewPlaylistForm(false)
+    setNewPlaylistName('')
+    setNewPlaylistDescription('')
+  }
+
+  const saveToPlaylist = async (playlistId) => {
+    if (!saveVideo?._id || savingPlaylistId) return
+
+    setSavingPlaylistId(playlistId)
+    setSaveError('')
+
+    try {
+      await apiClient.patch(`/playlist/add/${saveVideo._id}/${playlistId}`)
+      setSavePlaylists((currentPlaylists) =>
+        currentPlaylists.map((playlistItem) =>
+          playlistItem._id === playlistId
+            ? {
+                ...playlistItem,
+                hasCurrentVideo: true,
+                videos: playlistItem.hasCurrentVideo
+                  ? playlistItem.videos || []
+                  : [...(playlistItem.videos || []), saveVideo._id],
+                videoCount: playlistItem.hasCurrentVideo
+                  ? playlistItem.videoCount
+                  : (playlistItem.videoCount || 0) + 1,
+              }
+            : playlistItem
+        )
+      )
+    } catch (savePlaylistError) {
+      console.error('Unable to save video to playlist:', savePlaylistError)
+      setSaveError(savePlaylistError.response?.data?.message || 'Unable to save video.')
+    } finally {
+      setSavingPlaylistId('')
+    }
+  }
+
+  const createPlaylistAndSave = async (event) => {
+    event.preventDefault()
+    if (!saveVideo?._id || creatingPlaylist) return
+
+    const name = newPlaylistName.trim()
+    const description = newPlaylistDescription.trim()
+
+    if (!name) {
+      setSaveError('Playlist name is required.')
+      return
+    }
+
+    if (!description) {
+      setSaveError('Playlist description is required.')
+      return
+    }
+
+    setCreatingPlaylist(true)
+    setSaveError('')
+
+    try {
+      const response = await apiClient.post('/playlist', {
+        name,
+        description,
+      })
+      const createdPlaylist = response.data.data
+
+      await apiClient.patch(`/playlist/add/${saveVideo._id}/${createdPlaylist._id}`)
+      setSavePlaylists((currentPlaylists) => [
+        {
+          ...createdPlaylist,
+          videos: [saveVideo._id],
+          videoCount: 1,
+          hasCurrentVideo: true,
+          previewVideo: saveVideo,
+        },
+        ...currentPlaylists,
+      ])
+      setShowNewPlaylistForm(false)
+      setNewPlaylistName('')
+      setNewPlaylistDescription('')
+    } catch (createPlaylistError) {
+      console.error('Unable to create playlist:', createPlaylistError)
+      setSaveError(createPlaylistError.response?.data?.message || 'Unable to create playlist.')
+    } finally {
+      setCreatingPlaylist(false)
     }
   }
 
@@ -288,7 +455,7 @@ export default function History() {
 
                                 {openMenuKey === menuKey && (
                                   <div className="history-action-menu">
-                                    <button type="button" disabled>
+                                    <button type="button" onClick={() => openSaveDialog(video)}>
                                       <FaBookmark />
                                       <span>Save to playlist</span>
                                     </button>
@@ -364,6 +531,118 @@ export default function History() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {saveVideo && (
+        <div
+          className="history-save-backdrop"
+          role="presentation"
+          onMouseDown={closeSaveDialog}
+        >
+          <section
+            className="history-save-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-save-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="history-save-header">
+              <h2 id="history-save-title">Save to...</h2>
+              <button type="button" onClick={closeSaveDialog} aria-label="Close save dialog">
+                <FaTimes />
+              </button>
+            </header>
+
+            <div className="history-save-playlist-list">
+              {saveLoading ? (
+                <div className="history-save-state">Loading playlists...</div>
+              ) : saveError ? (
+                <div className="history-save-state error">{saveError}</div>
+              ) : savePlaylists.length === 0 ? (
+                <div className="history-save-state">No playlists yet</div>
+              ) : (
+                savePlaylists.map((playlistItem) => (
+                  <button
+                    key={playlistItem._id}
+                    type="button"
+                    className={`history-save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
+                    onClick={() => saveToPlaylist(playlistItem._id)}
+                    disabled={savingPlaylistId === playlistItem._id || playlistItem.hasCurrentVideo}
+                  >
+                    <span className="history-save-playlist-thumb">
+                      {playlistItem.previewVideo?.thumbnail ? (
+                        <img src={playlistItem.previewVideo.thumbnail} alt="" />
+                      ) : (
+                        <FaBookmark />
+                      )}
+                    </span>
+                    <span className="history-save-playlist-copy">
+                      <strong>{playlistItem.name}</strong>
+                      <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Private'}</span>
+                    </span>
+                    <span className="history-save-bookmark-icon">
+                      <FaBookmark />
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {showNewPlaylistForm ? (
+              <form className="history-new-playlist-form" onSubmit={createPlaylistAndSave}>
+                <input
+                  type="text"
+                  value={newPlaylistName}
+                  onChange={(event) => {
+                    setNewPlaylistName(event.target.value)
+                    setSaveError('')
+                  }}
+                  placeholder="Playlist name"
+                  maxLength="100"
+                  autoFocus
+                />
+                <textarea
+                  value={newPlaylistDescription}
+                  onChange={(event) => {
+                    setNewPlaylistDescription(event.target.value)
+                    setSaveError('')
+                  }}
+                  placeholder="Playlist description"
+                  maxLength="500"
+                  rows="3"
+                />
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewPlaylistForm(false)
+                      setNewPlaylistName('')
+                      setNewPlaylistDescription('')
+                      setSaveError('')
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={creatingPlaylist}>
+                    {creatingPlaylist ? 'Creating' : 'Create'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="history-new-playlist-button"
+                onClick={() => {
+                  setSaveError('')
+                  setShowNewPlaylistForm(true)
+                }}
+              >
+                <FaPlus />
+                <span>New playlist</span>
+              </button>
+            )}
+          </section>
         </div>
       )}
 

@@ -216,6 +216,17 @@
   border: 1px solid #e5e5e5;
   border-radius: 8px;
   background: #fafafa;
+  cursor: pointer;
+}
+
+.channel-playlist-card:hover {
+  border-color: #d0d0d0;
+  background: #f3f3f3;
+}
+
+.channel-playlist-card:focus-visible {
+  outline: 2px solid #f1425d;
+  outline-offset: 3px;
 }
 
 .channel-playlist-art {
@@ -237,24 +248,12 @@
   font-weight: 800;
 }
 
-.channel-playlist-card strong,
-.channel-playlist-card p {
+.channel-playlist-card strong {
   display: block;
   margin: 0;
-  padding: 0 14px;
-}
-
-.channel-playlist-card strong {
-  padding-top: 14px;
+  padding: 14px 14px 16px;
   color: #0f0f0f;
   font-size: 1rem;
-}
-
-.channel-playlist-card p {
-  padding-top: 7px;
-  padding-bottom: 16px;
-  color: #606060;
-  line-height: 1.45;
 }
 
 .channel-tweet-list {
@@ -579,7 +578,6 @@
 
   .channel-hero-copy p,
   .channel-video-card > span:not(.channel-video-thumb),
-  .channel-playlist-card p,
   .channel-tweet-card span,
   .channel-empty p,
   .channel-confirm-modal p,

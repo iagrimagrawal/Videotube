@@ -595,19 +595,32 @@
   border-top: 1px solid var(--watch-border);
 }
 
-.new-playlist-form input {
+.new-playlist-form input,
+.new-playlist-form textarea {
   width: 100%;
-  height: 44px;
-  padding: 0 12px;
   border: 1px solid #555;
   border-radius: 8px;
   outline: none;
   color: var(--watch-text);
   background: #171717;
   font-size: 1rem;
+  font-family: inherit;
 }
 
-.new-playlist-form input:focus {
+.new-playlist-form input {
+  height: 44px;
+  padding: 0 12px;
+}
+
+.new-playlist-form textarea {
+  min-height: 84px;
+  resize: vertical;
+  padding: 11px 12px;
+  line-height: 1.4;
+}
+
+.new-playlist-form input:focus,
+.new-playlist-form textarea:focus {
   border-color: var(--watch-blue);
 }
 
