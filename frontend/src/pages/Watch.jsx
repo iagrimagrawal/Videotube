@@ -191,6 +191,47 @@ const normalizeVideo = (video) => ({
   },
 })
 
+const WatchSkeleton = () => (
+  <main className="watch-content watch-skeleton" aria-busy="true" aria-label="Loading video">
+    <section className="watch-primary">
+      <div className="watch-skeleton-player watch-skeleton-shimmer" />
+      <div className="watch-skeleton-line watch-skeleton-title-line watch-skeleton-shimmer" />
+      <div className="watch-skeleton-meta-row">
+        <div className="watch-skeleton-channel">
+          <span className="watch-skeleton-avatar watch-skeleton-shimmer" />
+          <span className="watch-skeleton-text-group">
+            <span className="watch-skeleton-line watch-skeleton-name-line watch-skeleton-shimmer" />
+            <span className="watch-skeleton-line watch-skeleton-sub-line watch-skeleton-shimmer" />
+          </span>
+          <span className="watch-skeleton-pill watch-skeleton-shimmer" />
+        </div>
+        <div className="watch-skeleton-actions">
+          <span className="watch-skeleton-pill watch-skeleton-shimmer" />
+          <span className="watch-skeleton-pill watch-skeleton-shimmer" />
+          <span className="watch-skeleton-circle watch-skeleton-shimmer" />
+        </div>
+      </div>
+      <div className="watch-skeleton-description watch-skeleton-shimmer" />
+    </section>
+
+    <aside className="watch-secondary">
+      <div className="watch-skeleton-side-title watch-skeleton-line watch-skeleton-shimmer" />
+      <div className="watch-skeleton-up-next">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="watch-skeleton-card">
+            <span className="watch-skeleton-thumb watch-skeleton-shimmer" />
+            <span className="watch-skeleton-card-copy">
+              <span className="watch-skeleton-line watch-skeleton-card-title watch-skeleton-shimmer" />
+              <span className="watch-skeleton-line watch-skeleton-card-small watch-skeleton-shimmer" />
+              <span className="watch-skeleton-line watch-skeleton-card-small short watch-skeleton-shimmer" />
+            </span>
+          </div>
+        ))}
+      </div>
+    </aside>
+  </main>
+)
+
 export default function Watch() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -198,24 +239,24 @@ export default function Watch() {
   const playerRef = useRef(null)
   const playerFrameRef = useRef(null)
 
-  const [video, setVideo] = useState(() => {
-    const match = mockPlaylist.find((item) => item._id === id)
-    return match || mockPlaylist[3]
-  })
+  const initialMockVideo = mockPlaylist.find((item) => item._id === id) || null
+  const [video, setVideo] = useState(initialMockVideo)
+  const [isLoadingVideo, setIsLoadingVideo] = useState(!initialMockVideo)
+  const [videoError, setVideoError] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [playing, setPlaying] = useState(true)
   const [playedSeconds, setPlayedSeconds] = useState(0)
-  const [duration, setDuration] = useState(video.duration || 0)
+  const [duration, setDuration] = useState(initialMockVideo?.duration || 0)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [muted, setMuted] = useState(false)
   const [isFullMode, setIsFullMode] = useState(false)
   const [interactionStats, setInteractionStats] = useState({
-    views: video.views || 0,
-    likeCount: video.likeCount || 0,
-    isLiked: Boolean(video.isLiked),
-    isDisliked: Boolean(video.isDisliked),
-    subscriberCount: video.owner?.subscriberCount || 0,
-    isSubscribed: Boolean(video.isSubscribed),
+    views: initialMockVideo?.views || 0,
+    likeCount: initialMockVideo?.likeCount || 0,
+    isLiked: Boolean(initialMockVideo?.isLiked),
+    isDisliked: Boolean(initialMockVideo?.isDisliked),
+    subscriberCount: initialMockVideo?.owner?.subscriberCount || 0,
+    isSubscribed: Boolean(initialMockVideo?.isSubscribed),
     isOwner: false,
   })
   const [isTogglingLike, setIsTogglingLike] = useState(false)
@@ -224,6 +265,7 @@ export default function Watch() {
   const [hasCopiedShareLink, setHasCopiedShareLink] = useState(false)
 
   const playlist = useMemo(() => {
+    if (!video) return mockPlaylist
     const hasCurrentVideo = mockPlaylist.some((item) => item._id === video._id)
     return hasCurrentVideo ? mockPlaylist : [video, ...mockPlaylist]
   }, [video])
@@ -231,19 +273,21 @@ export default function Watch() {
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const activeListId = searchParams.get('list')
   const hasPlaylistContext = Boolean(activeListId || location.state?.fromPlaylist)
-  const currentIndex = playlist.findIndex((item) => item._id === video._id)
+  const currentIndex = video ? playlist.findIndex((item) => item._id === video._id) : -1
   const progress = duration > 0 ? Math.min((playedSeconds / duration) * 100, 100) : 0
-  const canUseLiveStats = isObjectId(video._id)
+  const canUseLiveStats = isObjectId(video?._id)
   const shareUrl = useMemo(() => {
-    if (typeof window === 'undefined') return `/watch/${video._id}`
-    return `${window.location.origin}/watch/${video._id}`
-  }, [video._id])
+    if (typeof window === 'undefined') return `/watch/${video?._id || id}`
+    return `${window.location.origin}/watch/${video?._id || id}`
+  }, [id, video?._id])
 
   useEffect(() => {
     let isMounted = true
     const mockMatch = mockPlaylist.find((item) => item._id === id)
 
     if (mockMatch) {
+      setIsLoadingVideo(false)
+      setVideoError('')
       setVideo(mockMatch)
       setDuration(mockMatch.duration)
       setPlayedSeconds(0)
@@ -252,6 +296,13 @@ export default function Watch() {
     }
 
     const fetchVideo = async () => {
+      setIsLoadingVideo(true)
+      setVideoError('')
+      setVideo(null)
+      setDuration(0)
+      setPlayedSeconds(0)
+      setPlaying(false)
+
       try {
         const response = await apiClient.get(`/videos/${id}`)
         if (!isMounted) return
@@ -271,10 +322,9 @@ export default function Watch() {
         setPlaying(true)
       } catch (error) {
         if (!isMounted) return
-        setVideo(mockPlaylist[3])
-        setDuration(mockPlaylist[3].duration)
-        setPlayedSeconds(0)
-        setPlaying(true)
+        setVideoError(error.response?.data?.message || 'Unable to load this video.')
+      } finally {
+        if (isMounted) setIsLoadingVideo(false)
       }
     }
 
@@ -286,6 +336,8 @@ export default function Watch() {
   }, [id])
 
   useEffect(() => {
+    if (!video || isLoadingVideo) return undefined
+
     if (!canUseLiveStats) {
       setInteractionStats({
         views: video.views || 0,
@@ -319,7 +371,7 @@ export default function Watch() {
       isMounted = false
       window.clearInterval(intervalId)
     }
-  }, [canUseLiveStats, video._id, video.views, video.likeCount, video.isLiked, video.owner?.subscriberCount, video.isSubscribed])
+  }, [canUseLiveStats, isLoadingVideo, video, video?._id, video?.views, video?.likeCount, video?.isLiked, video?.owner?.subscriberCount, video?.isSubscribed])
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -489,6 +541,32 @@ export default function Watch() {
     } catch (error) {
       console.error('Unable to copy share link:', error)
     }
+  }
+
+  if (isLoadingVideo) {
+    return (
+      <div className={`watch-shell ${isFullMode ? 'full-mode' : ''}`}>
+        <Navbar onToggleSidebar={() => setSidebarOpen((open) => !open)} sidebarOpen={sidebarOpen} />
+        <WatchSkeleton />
+      </div>
+    )
+  }
+
+  if (!video) {
+    return (
+      <div className={`watch-shell ${isFullMode ? 'full-mode' : ''}`}>
+        <Navbar onToggleSidebar={() => setSidebarOpen((open) => !open)} sidebarOpen={sidebarOpen} />
+        <main className="watch-content">
+          <section className="watch-error-state">
+            <h1>Video unavailable</h1>
+            <p>{videoError || 'This video could not be loaded.'}</p>
+            <button type="button" onClick={() => navigate('/')}>
+              Back to home
+            </button>
+          </section>
+        </main>
+      </div>
+    )
   }
 
   return (

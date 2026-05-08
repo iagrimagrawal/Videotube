@@ -42,6 +42,7 @@ export default function Channel() {
   const ownerId = channelId || user?._id
   const [activeTab, setActiveTab] = useState('home')
   const [channelUser, setChannelUser] = useState(user)
+  const [channelStats, setChannelStats] = useState(null)
   const [popularVideos, setPopularVideos] = useState([])
   const [allVideos, setAllVideos] = useState([])
   const [playlists, setPlaylists] = useState([])
@@ -66,9 +67,24 @@ export default function Channel() {
       setError('')
 
       try {
-        const [currentUserResponse, popularResponse, videosResponse, playlistsResponse, tweetsResponse] =
-          await Promise.all([
-            isOwnChannel ? apiClient.get('/users/current-user') : Promise.resolve(null),
+        let currentUserResponse = null
+        let popularResponse = null
+        let videosResponse = null
+        let statsResponse = null
+        let playlistsResponse = null
+        let tweetsResponse = null
+
+        if (isOwnChannel) {
+          ;[currentUserResponse, videosResponse, statsResponse, playlistsResponse, tweetsResponse] =
+            await Promise.all([
+              apiClient.get('/users/current-user'),
+              apiClient.get('/dashboard/videos'),
+              apiClient.get('/dashboard/stats'),
+              apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
+              apiClient.get(`/tweet/user/${ownerId}`),
+            ])
+        } else {
+          ;[popularResponse, videosResponse, playlistsResponse, tweetsResponse] = await Promise.all([
             apiClient.get('/videos', {
               params: { userId: ownerId, limit: 50, sortBy: 'views', sortType: 'desc' },
             }),
@@ -78,13 +94,17 @@ export default function Channel() {
             apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
             apiClient.get(`/tweet/user/${ownerId}`),
           ])
+        }
 
         if (!isMounted) return
 
-        const nextPopularVideos = getList(popularResponse.data.data)
         const nextVideos = getList(videosResponse.data.data)
+        const nextPopularVideos = isOwnChannel
+          ? [...nextVideos].sort((first, second) => (second.views || 0) - (first.views || 0))
+          : getList(popularResponse.data.data)
         const nextPlaylists = getList(playlistsResponse.data.data)
         const nextTweets = getList(tweetsResponse.data.data)
+        const nextStats = statsResponse?.data?.data || null
         const nextUser =
           currentUserResponse?.data?.data ||
           nextVideos[0]?.owner ||
@@ -95,8 +115,10 @@ export default function Channel() {
 
         setChannelUser({
           ...nextUser,
-          subscriberCount: nextUser?.subscriberCount || nextUser?.subscribersCount || 0,
+          subscriberCount:
+            nextStats?.totalSubscribers || nextUser?.subscriberCount || nextUser?.subscribersCount || 0,
         })
+        setChannelStats(nextStats)
         setPopularVideos(nextPopularVideos)
         setAllVideos(nextVideos)
         setPlaylists(nextPlaylists)
@@ -397,7 +419,13 @@ export default function Channel() {
             <p>
               <strong>@{channelUser?.username || 'user'}</strong>
               <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
-              <span>- {formatCount(allVideos.length)} videos</span>
+              <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
+              {isOwnChannel && channelStats && (
+                <>
+                  <span>- {formatCount(channelStats.totalViews)} views</span>
+                  <span>- {formatCount(channelStats.totalLikes)} likes</span>
+                </>
+              )}
             </p>
             <p className="channel-about">
               {channelUser?.coverImage ? 'More about this channel' : 'More about this channel ...more'}
