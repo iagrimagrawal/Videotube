@@ -417,6 +417,229 @@
   background: rgba(0, 0, 0, 0.62);
 }
 
+.save-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 92px 380px 24px 24px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.save-modal {
+  width: min(500px, calc(100vw - 32px));
+  max-height: min(620px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--watch-border);
+  border-radius: 14px;
+  background: #282828;
+  color: var(--watch-text);
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.48);
+}
+
+.save-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+}
+
+.save-modal-header h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.save-modal-header button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--watch-text);
+  background: transparent;
+}
+
+.save-modal-header button:hover {
+  background: var(--watch-surface-hover);
+}
+
+.save-playlist-list {
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+
+.save-playlist-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.save-playlist-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #777;
+}
+
+.save-playlist-item {
+  width: 100%;
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--watch-text);
+  background: transparent;
+  text-align: left;
+}
+
+.save-playlist-item:hover,
+.save-playlist-item.saved {
+  background: #3d3d3d;
+}
+
+.save-playlist-item:disabled {
+  cursor: default;
+}
+
+.save-playlist-thumb {
+  width: 76px;
+  aspect-ratio: 16 / 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 5px;
+  color: #ddd;
+  background: #171717;
+}
+
+.save-playlist-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.save-playlist-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save-playlist-copy strong {
+  overflow: hidden;
+  color: var(--watch-text);
+  font-size: 1rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-playlist-copy span {
+  color: var(--watch-muted);
+  font-size: 0.9rem;
+}
+
+.save-bookmark-icon {
+  display: inline-flex;
+  justify-content: center;
+  color: var(--watch-text);
+  font-size: 1.45rem;
+}
+
+.save-playlist-item.saved .save-bookmark-icon {
+  color: var(--watch-blue);
+}
+
+.save-state {
+  padding: 22px 12px;
+  color: var(--watch-muted);
+  font-weight: 700;
+}
+
+.save-state.error {
+  color: #ffb4ab;
+}
+
+.new-playlist-button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0 14px 14px;
+  border-radius: 999px;
+  color: var(--watch-text);
+  background: #3d3d3d;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.new-playlist-button:hover {
+  background: #4a4a4a;
+}
+
+.new-playlist-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-top: 1px solid var(--watch-border);
+}
+
+.new-playlist-form input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #555;
+  border-radius: 8px;
+  outline: none;
+  color: var(--watch-text);
+  background: #171717;
+  font-size: 1rem;
+}
+
+.new-playlist-form input:focus {
+  border-color: var(--watch-blue);
+}
+
+.new-playlist-form div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.new-playlist-form button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: var(--watch-text);
+  background: #3d3d3d;
+  font-weight: 800;
+}
+
+.new-playlist-form button[type="submit"] {
+  color: #0f0f0f;
+  background: #f1f1f1;
+}
+
+.new-playlist-form button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.new-playlist-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .share-modal {
   width: min(528px, 100%);
   padding: 20px;
@@ -708,6 +931,65 @@
   background: var(--watch-surface);
 }
 
+.playlist-collapsed-panel {
+  width: min(504px, 100%);
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 10px 16px 20px;
+  border: 1px solid #4a4235;
+  border-radius: 14px;
+  color: var(--watch-text);
+  background: #241f18;
+  text-align: left;
+}
+
+.playlist-collapsed-panel:hover {
+  background: #2b251d;
+}
+
+.playlist-collapsed-panel span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.playlist-collapsed-panel strong {
+  overflow: hidden;
+  color: var(--watch-text);
+  font-size: 1rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-collapsed-panel em {
+  overflow: hidden;
+  color: #d2c2ad;
+  font-size: 0.92rem;
+  font-style: normal;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-collapsed-panel i {
+  width: 50px;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 50px;
+  border-radius: 50%;
+  color: var(--watch-text);
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 1.15rem;
+  font-style: normal;
+}
+
 .playlist-header {
   display: flex;
   align-items: flex-start;
@@ -751,6 +1033,12 @@
   max-height: 586px;
   overflow-y: auto;
   padding-bottom: 8px;
+}
+
+.playlist-panel-state {
+  padding: 18px;
+  color: var(--watch-muted);
+  font-weight: 800;
 }
 
 .playlist-item {
@@ -1051,6 +1339,24 @@
 
   .share-modal {
     padding: 16px;
+  }
+
+  .save-modal-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .save-modal {
+    max-height: calc(100vh - 32px);
+  }
+
+  .save-playlist-item {
+    grid-template-columns: 64px minmax(0, 1fr) 36px;
+  }
+
+  .save-playlist-thumb {
+    width: 64px;
   }
 
   .share-link-box {

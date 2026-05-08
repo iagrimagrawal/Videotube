@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import apiClient from '../lib/api'
 import './Sidebar.css'
 
 export default function Sidebar({ isOpen, onClose, collapsed = false }) {
@@ -8,17 +9,54 @@ export default function Sidebar({ isOpen, onClose, collapsed = false }) {
   const location = useLocation()
   const { user } = useAuth()
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(true)
+  const [subscribedChannels, setSubscribedChannels] = useState([])
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false)
+  const [subscriptionsError, setSubscriptionsError] = useState('')
 
-  // Mock subscription data - replace with real data from API
-  const mockSubscriptions = [
-    { id: 1, name: 'TechChannel', avatar: '🎥' },
-    { id: 2, name: 'ComedyHub', avatar: '😂' },
-    { id: 3, name: 'MusicMasters', avatar: '🎵' },
-    { id: 4, name: 'FitnessGuru', avatar: '💪' },
-    { id: 5, name: 'CookingShow', avatar: '👨‍🍳' },
-  ]
 
   const isActive = (path) => location.pathname === path
+
+  useEffect(() => {
+    if (!user?._id) {
+      setSubscribedChannels([])
+      return undefined
+    }
+
+    let isMounted = true
+
+    const fetchSubscribedChannels = async () => {
+      setSubscriptionsLoading(true)
+      setSubscriptionsError('')
+
+      try {
+        const response = await apiClient.get(`/subscription/u/${user._id}`, {
+          params: { limit: 50 },
+        })
+
+        if (!isMounted) return
+
+        const channels = response.data.data?.channels || []
+        setSubscribedChannels(
+          channels
+            .map((subscription) => subscription.channel)
+            .filter(Boolean)
+        )
+      } catch (error) {
+        if (!isMounted) return
+        console.error('Unable to load subscribed channels:', error)
+        setSubscribedChannels([])
+        setSubscriptionsError('Unable to load subscriptions.')
+      } finally {
+        if (isMounted) setSubscriptionsLoading(false)
+      }
+    }
+
+    fetchSubscribedChannels()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?._id])
 
   const handleNavigate = (path) => {
     navigate(path)
@@ -153,16 +191,36 @@ export default function Sidebar({ isOpen, onClose, collapsed = false }) {
             </button>
             {subscriptionsOpen && (
               <nav className="sidebar-nav subscriptions-list">
-                {mockSubscriptions.map((subscription) => (
-                  <button
-                    key={subscription.id}
-                    className="sidebar-item subscription-item"
-                    onClick={() => handleNavigate(`/channel/${subscription.id}`)}
-                  >
-                    <div className="subscription-avatar">{subscription.avatar}</div>
-                    <span className="subscription-name">{subscription.name}</span>
-                  </button>
-                ))}
+                {subscriptionsLoading ? (
+                  <div className="subscriptions-state">Loading subscriptions...</div>
+                ) : subscriptionsError ? (
+                  <div className="subscriptions-state">{subscriptionsError}</div>
+                ) : subscribedChannels.length === 0 ? (
+                  <div className="subscriptions-state">No subscriptions yet</div>
+                ) : (
+                  subscribedChannels.map((channel) => (
+                    <button
+                      key={channel._id}
+                      className="sidebar-item subscription-item"
+                      onClick={() => handleNavigate(`/channel/${channel._id}`)}
+                    >
+                      <div className="subscription-avatar">
+                        {channel.avatar ? (
+                          <img src={channel.avatar} alt="" />
+                        ) : (
+                          <span>
+                            {channel.fullName?.charAt(0).toUpperCase() ||
+                              channel.username?.charAt(0).toUpperCase() ||
+                              'C'}
+                          </span>
+                        )}
+                      </div>
+                      <span className="subscription-name">
+                        {channel.fullName || channel.username || 'Channel'}
+                      </span>
+                    </button>
+                  ))
+                )}
               </nav>
             )}
           </div>
