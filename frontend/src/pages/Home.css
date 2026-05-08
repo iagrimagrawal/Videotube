@@ -25,8 +25,26 @@
   width: 100%;
 }
 
+.home-main.home-main-collapsed {
+  margin-left: 80px;
+}
+
+@media (max-width: 1024px) {
+  .home-main {
+    margin-left: 240px;
+  }
+
+  .home-main.home-main-collapsed {
+    margin-left: 80px;
+  }
+}
+
 @media (max-width: 768px) {
   .home-main {
+    margin-left: 0;
+  }
+
+  .home-main.home-main-collapsed {
     margin-left: 0;
   }
 }

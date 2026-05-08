@@ -1,24 +1,62 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import apiClient from '../lib/api'
 import './Sidebar.css'
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, collapsed = false }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
   const [subscriptionsOpen, setSubscriptionsOpen] = useState(true)
+  const [subscribedChannels, setSubscribedChannels] = useState([])
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false)
+  const [subscriptionsError, setSubscriptionsError] = useState('')
 
-  // Mock subscription data - replace with real data from API
-  const mockSubscriptions = [
-    { id: 1, name: 'TechChannel', avatar: '🎥' },
-    { id: 2, name: 'ComedyHub', avatar: '😂' },
-    { id: 3, name: 'MusicMasters', avatar: '🎵' },
-    { id: 4, name: 'FitnessGuru', avatar: '💪' },
-    { id: 5, name: 'CookingShow', avatar: '👨‍🍳' },
-  ]
 
   const isActive = (path) => location.pathname === path
+
+  useEffect(() => {
+    if (!user?._id) {
+      setSubscribedChannels([])
+      return undefined
+    }
+
+    let isMounted = true
+
+    const fetchSubscribedChannels = async () => {
+      setSubscriptionsLoading(true)
+      setSubscriptionsError('')
+
+      try {
+        const response = await apiClient.get(`/subscription/u/${user._id}`, {
+          params: { limit: 50 },
+        })
+
+        if (!isMounted) return
+
+        const channels = response.data.data?.channels || []
+        setSubscribedChannels(
+          channels
+            .map((subscription) => subscription.channel)
+            .filter(Boolean)
+        )
+      } catch (error) {
+        if (!isMounted) return
+        console.error('Unable to load subscribed channels:', error)
+        setSubscribedChannels([])
+        setSubscriptionsError('Unable to load subscriptions.')
+      } finally {
+        if (isMounted) setSubscriptionsLoading(false)
+      }
+    }
+
+    fetchSubscribedChannels()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user?._id])
 
   const handleNavigate = (path) => {
     navigate(path)
@@ -28,6 +66,55 @@ export default function Sidebar({ isOpen, onClose }) {
     }
   }
 
+  const compactItems = [
+    {
+      label: 'Home',
+      path: '/',
+      active: isActive('/'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 10.75 12 3l9 7.75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 10v10h14V10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 20v-6h6v6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Tweets',
+      path: '/tweets',
+      active: isActive('/tweets'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M6 13.5 17.5 4a3 3 0 0 1 2.35 5.45L8.35 19A3 3 0 0 1 6 13.5Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8.5 11.5 15.5 16.5" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Playlists',
+      path: '/playlists',
+      active: isActive('/playlists'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="6" y="5" width="14" height="12" rx="2" strokeWidth="2" />
+          <path d="M10 9.5 15 12l-5 2.5v-5Z" fill="currentColor" stroke="none" />
+          <path d="M4 8v12h13" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'You',
+      path: '/channel',
+      active: isActive('/channel'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="8" r="4" strokeWidth="2" />
+          <path d="M4 21a8 8 0 0 1 16 0" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+  ]
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -35,7 +122,23 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="sidebar-overlay" onClick={onClose}></div>
       )}
 
-      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        <nav className="sidebar-rail-nav" aria-label="Compact navigation">
+          {compactItems.map((item) => (
+            <button
+              key={item.path}
+              className={`sidebar-rail-item ${item.active ? 'active' : ''}`}
+              onClick={() => handleNavigate(item.path)}
+              title={item.label}
+              aria-label={item.label}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-expanded-content">
         {/* Main Menu Section */}
         <div className="sidebar-section">
           <div className="sidebar-section-title">Main</div>
@@ -58,6 +161,15 @@ export default function Sidebar({ isOpen, onClose }) {
               </svg>
               <span>Tweets</span>
             </button>
+            <button
+              className={`sidebar-item ${isActive('/playlists') ? 'active' : ''}`}
+              onClick={() => handleNavigate('/playlists')}
+            >
+              <svg className="sidebar-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
+              </svg>
+              <span>Playlists</span>
+            </button>
           </nav>
         </div>
 
@@ -79,16 +191,36 @@ export default function Sidebar({ isOpen, onClose }) {
             </button>
             {subscriptionsOpen && (
               <nav className="sidebar-nav subscriptions-list">
-                {mockSubscriptions.map((subscription) => (
-                  <button
-                    key={subscription.id}
-                    className="sidebar-item subscription-item"
-                    onClick={() => handleNavigate(`/channel/${subscription.id}`)}
-                  >
-                    <div className="subscription-avatar">{subscription.avatar}</div>
-                    <span className="subscription-name">{subscription.name}</span>
-                  </button>
-                ))}
+                {subscriptionsLoading ? (
+                  <div className="subscriptions-state">Loading subscriptions...</div>
+                ) : subscriptionsError ? (
+                  <div className="subscriptions-state">{subscriptionsError}</div>
+                ) : subscribedChannels.length === 0 ? (
+                  <div className="subscriptions-state">No subscriptions yet</div>
+                ) : (
+                  subscribedChannels.map((channel) => (
+                    <button
+                      key={channel._id}
+                      className="sidebar-item subscription-item"
+                      onClick={() => handleNavigate(`/channel/${channel._id}`)}
+                    >
+                      <div className="subscription-avatar">
+                        {channel.avatar ? (
+                          <img src={channel.avatar} alt="" />
+                        ) : (
+                          <span>
+                            {channel.fullName?.charAt(0).toUpperCase() ||
+                              channel.username?.charAt(0).toUpperCase() ||
+                              'C'}
+                          </span>
+                        )}
+                      </div>
+                      <span className="subscription-name">
+                        {channel.fullName || channel.username || 'Channel'}
+                      </span>
+                    </button>
+                  ))
+                )}
               </nav>
             )}
           </div>
@@ -129,6 +261,7 @@ export default function Sidebar({ isOpen, onClose }) {
             </nav>
           </div>
         )}
+        </div>
       </aside>
     </>
   )

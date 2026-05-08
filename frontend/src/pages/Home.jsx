@@ -9,6 +9,7 @@ const HOME_VIDEO_LIMIT = 12
 
 export default function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [videos, setVideos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -19,6 +20,8 @@ export default function Home() {
     const handleResize = () => {
       if (window.innerWidth > 768) {
         setSidebarOpen(false)
+      } else {
+        setSidebarCollapsed(false)
       }
     }
 
@@ -89,17 +92,30 @@ export default function Home() {
 
   const filters = ['all', 'trending', 'new', 'subscriptions']
 
+  const handleToggleSidebar = () => {
+    if (window.innerWidth <= 768) {
+      setSidebarOpen((current) => !current)
+      return
+    }
+
+    setSidebarCollapsed((current) => !current)
+  }
+
   return (
     <div className="home-container">
       <Navbar
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        sidebarOpen={sidebarOpen}
+        onToggleSidebar={handleToggleSidebar}
+        sidebarOpen={window.innerWidth <= 768 ? sidebarOpen : !sidebarCollapsed}
       />
 
       <div className="home-layout">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          collapsed={sidebarCollapsed}
+        />
 
-        <main className="home-main">
+        <main className={`home-main ${sidebarCollapsed ? 'home-main-collapsed' : ''}`}>
           {/* Filter Section */}
           <div className="filter-section">
             <div className="filter-buttons">

@@ -10,6 +10,8 @@ import Tweets from './pages/Tweets'
 import CreateTweet from './pages/CreateTweet'
 import Channel from './pages/Channel'
 import History from './pages/History'
+import Playlists from './pages/Playlists'
+import PlaylistDetail from './pages/PlaylistDetail'
 import './App.css'
 
 export default function App() {
@@ -58,6 +60,8 @@ export default function App() {
               <Route path="/create-tweet" element={<CreateTweet />} />
               <Route path="/channel" element={<Channel />} />
               <Route path="/channel/:channelId" element={<Channel />} />
+              <Route path="/playlists" element={<Playlists />} />
+              <Route path="/playlists/:playlistId" element={<PlaylistDetail />} />
               <Route path="/history" element={<History />} />
               <Route path="/watch/:id" element={<Watch />} />
               <Route path="/upload" element={<Upload />} />

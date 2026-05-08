@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import ReactPlayer from 'react-player'
 import {
+  FaBookmark,
   FaCheckCircle,
+  FaChevronDown,
   FaClosedCaptioning,
   FaCompress,
-  FaEllipsisH,
   FaExpand,
   FaPause,
   FaPlay,
+  FaPlus,
   FaRedoAlt,
   FaShare,
   FaStepBackward,
@@ -19,6 +21,7 @@ import {
   FaVolumeUp,
 } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
+import { useAuth } from '../hooks/useAuth'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
 import './Watch.css'
@@ -191,6 +194,19 @@ const normalizeVideo = (video) => ({
   },
 })
 
+const normalizePlaylistVideo = (item) => {
+  const video = item?.video || item
+  if (!video?._id) return null
+
+  return {
+    ...video,
+    owner: {
+      ...mockPlaylist[3].owner,
+      ...(video.owner || {}),
+    },
+  }
+}
+
 const WatchSkeleton = () => (
   <main className="watch-content watch-skeleton" aria-busy="true" aria-label="Loading video">
     <section className="watch-primary">
@@ -236,6 +252,7 @@ export default function Watch() {
   const { id } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const playerRef = useRef(null)
   const playerFrameRef = useRef(null)
 
@@ -263,16 +280,29 @@ export default function Watch() {
   const [isTogglingSubscription, setIsTogglingSubscription] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
   const [hasCopiedShareLink, setHasCopiedShareLink] = useState(false)
-
-  const playlist = useMemo(() => {
-    if (!video) return mockPlaylist
-    const hasCurrentVideo = mockPlaylist.some((item) => item._id === video._id)
-    return hasCurrentVideo ? mockPlaylist : [video, ...mockPlaylist]
-  }, [video])
+  const [isSaveOpen, setIsSaveOpen] = useState(false)
+  const [savePlaylists, setSavePlaylists] = useState([])
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [savingPlaylistId, setSavingPlaylistId] = useState('')
+  const [showNewPlaylistForm, setShowNewPlaylistForm] = useState(false)
+  const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [creatingPlaylist, setCreatingPlaylist] = useState(false)
+  const [playlistDetails, setPlaylistDetails] = useState(null)
+  const [playlistVideos, setPlaylistVideos] = useState([])
+  const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
+  const [playlistError, setPlaylistError] = useState('')
+  const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false)
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const activeListId = searchParams.get('list')
-  const hasPlaylistContext = Boolean(activeListId || location.state?.fromPlaylist)
+  const hasPlaylistContext = Boolean(activeListId)
+  const playlist = useMemo(() => {
+    if (activeListId) return playlistVideos
+    if (!video) return mockPlaylist
+    const hasCurrentVideo = mockPlaylist.some((item) => item._id === video._id)
+    return hasCurrentVideo ? mockPlaylist : [video, ...mockPlaylist]
+  }, [activeListId, playlistVideos, video])
   const currentIndex = video ? playlist.findIndex((item) => item._id === video._id) : -1
   const progress = duration > 0 ? Math.min((playedSeconds / duration) * 100, 100) : 0
   const canUseLiveStats = isObjectId(video?._id)
@@ -374,6 +404,64 @@ export default function Watch() {
   }, [canUseLiveStats, isLoadingVideo, video, video?._id, video?.views, video?.likeCount, video?.isLiked, video?.owner?.subscriberCount, video?.isSubscribed])
 
   useEffect(() => {
+    if (!activeListId) {
+      setPlaylistDetails(null)
+      setPlaylistVideos([])
+      setPlaylistError('')
+      setIsPlaylistCollapsed(false)
+      return undefined
+    }
+
+    let isMounted = true
+    setIsPlaylistCollapsed(false)
+
+    const fetchPlaylistContext = async () => {
+      setIsLoadingPlaylist(true)
+      setPlaylistError('')
+
+      try {
+        const [detailsResponse, videosResponse] = await Promise.allSettled([
+          apiClient.get(`/playlist/${activeListId}`),
+          apiClient.get(`/playlist/${activeListId}/videos`, { params: { limit: 100 } }),
+        ])
+
+        if (!isMounted) return
+
+        if (detailsResponse.status === 'fulfilled') {
+          setPlaylistDetails(detailsResponse.value.data.data)
+        } else {
+          setPlaylistDetails(null)
+          setPlaylistError(detailsResponse.reason?.response?.data?.message || 'Unable to load playlist.')
+        }
+
+        if (videosResponse.status === 'fulfilled') {
+          setPlaylistVideos(
+            (videosResponse.value.data.data || [])
+              .map(normalizePlaylistVideo)
+              .filter(Boolean)
+          )
+        } else {
+          setPlaylistVideos([])
+        }
+      } catch (error) {
+        if (!isMounted) return
+        console.error('Unable to load playlist context:', error)
+        setPlaylistDetails(null)
+        setPlaylistVideos([])
+        setPlaylistError('Unable to load playlist.')
+      } finally {
+        if (isMounted) setIsLoadingPlaylist(false)
+      }
+    }
+
+    fetchPlaylistContext()
+
+    return () => {
+      isMounted = false
+    }
+  }, [activeListId])
+
+  useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullMode(Boolean(document.fullscreenElement))
     }
@@ -395,6 +483,19 @@ export default function Watch() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isShareOpen])
 
+  useEffect(() => {
+    if (!isSaveOpen) return undefined
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsSaveOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isSaveOpen])
+
   const seekToSeconds = (seconds) => {
     const nextTime = Math.max(0, Math.min(seconds, duration || 0))
     playerRef.current?.seekTo(nextTime, 'seconds')
@@ -404,20 +505,60 @@ export default function Watch() {
   const goToVideo = (targetVideo, preservePlaylist = hasPlaylistContext) => {
     if (!targetVideo) return
 
-    const listId = activeListId || 'a2z-dsa'
-    const playlistQuery = preservePlaylist ? `?list=${encodeURIComponent(listId)}` : ''
+    const playlistQuery = preservePlaylist && activeListId ? `?list=${encodeURIComponent(activeListId)}` : ''
 
     navigate(`/watch/${targetVideo._id}${playlistQuery}`, {
       state: preservePlaylist ? { fromPlaylist: true } : null,
     })
   }
 
-  const goToNext = () => {
-    const nextVideo = playlist[(currentIndex + 1) % playlist.length]
+  const getRandomVideoAfterPlaylist = async () => {
+    const excludedIds = new Set([video?._id, ...playlist.map((item) => item._id)].filter(Boolean))
+
+    try {
+      const response = await apiClient.get('/videos', {
+        params: {
+          limit: 50,
+          sortBy: 'createdAt',
+          sortType: 'desc',
+        },
+      })
+      const sourceVideos = Array.isArray(response.data.data)
+        ? response.data.data
+        : response.data.data?.videos || response.data.data?.docs || []
+      const candidates = sourceVideos.filter((item) => item?._id && !excludedIds.has(item._id))
+
+      if (candidates.length > 0) {
+        return candidates[Math.floor(Math.random() * candidates.length)]
+      }
+    } catch (error) {
+      console.error('Unable to load random video:', error)
+    }
+
+    const fallbackVideos = mockPlaylist.filter((item) => item._id !== video?._id)
+    return fallbackVideos[Math.floor(Math.random() * fallbackVideos.length)] || null
+  }
+
+  const goToNext = async () => {
+    if (hasPlaylistContext && currentIndex >= playlist.length - 1) {
+      const randomVideo = await getRandomVideoAfterPlaylist()
+      if (randomVideo) {
+        goToVideo(randomVideo, false)
+      } else {
+        setPlaying(false)
+      }
+      return
+    }
+
+    const nextVideo = hasPlaylistContext
+      ? playlist[currentIndex + 1]
+      : playlist[(currentIndex + 1) % playlist.length]
     goToVideo(nextVideo)
   }
 
   const goToPrevious = () => {
+    if (hasPlaylistContext && currentIndex <= 0) return
+
     const previousIndex = currentIndex <= 0 ? playlist.length - 1 : currentIndex - 1
     goToVideo(playlist[previousIndex])
   }
@@ -540,6 +681,146 @@ export default function Watch() {
       setHasCopiedShareLink(true)
     } catch (error) {
       console.error('Unable to copy share link:', error)
+    }
+  }
+
+  const playlistHasVideo = (playlistItem) =>
+    (playlistItem.videos || []).some((playlistVideo) => {
+      const playlistVideoId = typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
+      return playlistVideoId === video?._id
+    })
+
+  const normalizeSavePlaylists = (items = []) =>
+    items
+      .filter((playlistItem) => playlistItem?._id)
+      .map((playlistItem) => ({
+        ...playlistItem,
+        videoCount: playlistItem.videos?.length || playlistItem.videoCount || 0,
+        hasCurrentVideo: playlistHasVideo(playlistItem),
+      }))
+
+  const fetchSavePlaylists = async () => {
+    if (!user?._id) return
+
+    setSaveLoading(true)
+    setSaveError('')
+
+    try {
+      const response = await apiClient.get(`/playlist/user/${user._id}`, {
+        params: { limit: 50 },
+      })
+
+      const basePlaylists = normalizeSavePlaylists(response.data.data || [])
+      const playlistsWithPreview = await Promise.all(
+        basePlaylists.map(async (playlistItem) => {
+          if (playlistItem.videoCount === 0) return playlistItem
+
+          try {
+            const videosResponse = await apiClient.get(`/playlist/${playlistItem._id}/videos`, {
+              params: { limit: 1 },
+            })
+            return {
+              ...playlistItem,
+              previewVideo: videosResponse.data.data?.[0]?.video,
+            }
+          } catch {
+            return playlistItem
+          }
+        })
+      )
+
+      setSavePlaylists(playlistsWithPreview)
+    } catch (error) {
+      console.error('Unable to load playlists:', error)
+      setSaveError('Unable to load playlists.')
+    } finally {
+      setSaveLoading(false)
+    }
+  }
+
+  const openSaveDialog = () => {
+    setSaveError('')
+    setShowNewPlaylistForm(false)
+    setNewPlaylistName('')
+    setIsSaveOpen(true)
+    fetchSavePlaylists()
+  }
+
+  const saveToPlaylist = async (playlistId) => {
+    if (!canUseLiveStats || savingPlaylistId) {
+      setSaveError('Only uploaded videos can be saved to playlists.')
+      return
+    }
+
+    setSavingPlaylistId(playlistId)
+    setSaveError('')
+
+    try {
+      await apiClient.patch(`/playlist/add/${video._id}/${playlistId}`)
+      setSavePlaylists((currentPlaylists) =>
+        currentPlaylists.map((playlistItem) =>
+          playlistItem._id === playlistId
+            ? {
+                ...playlistItem,
+                hasCurrentVideo: true,
+                videos: [...(playlistItem.videos || []), video._id],
+                videoCount: playlistItem.hasCurrentVideo
+                  ? playlistItem.videoCount
+                  : (playlistItem.videoCount || 0) + 1,
+              }
+            : playlistItem
+        )
+      )
+    } catch (error) {
+      console.error('Unable to save video to playlist:', error)
+      setSaveError(error.response?.data?.message || 'Unable to save video.')
+    } finally {
+      setSavingPlaylistId('')
+    }
+  }
+
+  const createPlaylistAndSave = async (event) => {
+    event.preventDefault()
+    const name = newPlaylistName.trim()
+
+    if (!name) {
+      setSaveError('Playlist name is required.')
+      return
+    }
+
+    if (!canUseLiveStats) {
+      setSaveError('Only uploaded videos can be saved to playlists.')
+      return
+    }
+
+    setCreatingPlaylist(true)
+    setSaveError('')
+
+    try {
+      const response = await apiClient.post('/playlist', {
+        name,
+        description: `Saved videos from ${user?.username || 'VideoTube'}`,
+      })
+      const createdPlaylist = response.data.data
+
+      await apiClient.patch(`/playlist/add/${video._id}/${createdPlaylist._id}`)
+      setSavePlaylists((currentPlaylists) => [
+        {
+          ...createdPlaylist,
+          videos: [video._id],
+          videoCount: 1,
+          hasCurrentVideo: true,
+          previewVideo: video,
+        },
+        ...currentPlaylists,
+      ])
+      setShowNewPlaylistForm(false)
+      setNewPlaylistName('')
+    } catch (error) {
+      console.error('Unable to create playlist:', error)
+      setSaveError(error.response?.data?.message || 'Unable to create playlist.')
+    } finally {
+      setCreatingPlaylist(false)
     }
   }
 
@@ -737,8 +1018,9 @@ export default function Watch() {
                 <FaShare />
                 <span>Share</span>
               </button>
-              <button className="action-circle" aria-label="More actions">
-                <FaEllipsisH />
+              <button className="action-pill" onClick={openSaveDialog}>
+                <FaBookmark />
+                <span>Save</span>
               </button>
             </div>
           </div>
@@ -754,73 +1036,107 @@ export default function Watch() {
 
         <aside className="watch-secondary">
           {hasPlaylistContext && (
-            <div className="playlist-panel">
-              <div className="playlist-header">
-                <div>
-                  <h2>Course playlist</h2>
-                  <span>
-                    {video.owner.username} - {currentIndex + 1} / {playlist.length}
-                  </span>
-                </div>
-                <button
-                  className="playlist-close"
-                  aria-label="Close playlist"
-                  onClick={() => goToVideo(video, false)}
-                >
-                  x
-                </button>
-              </div>
-
-              <div className="playlist-list">
-                {playlist.map((item, index) => (
+            isPlaylistCollapsed ? (
+              <button
+                type="button"
+                className="playlist-collapsed-panel"
+                onClick={() => setIsPlaylistCollapsed(false)}
+                aria-label="Expand playlist"
+              >
+                <span>
+                  <strong>
+                    Next: {playlist[currentIndex + 1]?.title || 'Random video'}
+                  </strong>
+                  <em>
+                    {playlistDetails?.name || 'Playlist'} - {currentIndex >= 0 ? currentIndex + 1 : 0} / {playlist.length}
+                  </em>
+                </span>
+                <i>
+                  <FaChevronDown />
+                </i>
+              </button>
+            ) : (
+              <div className="playlist-panel">
+                <div className="playlist-header">
+                  <div>
+                    <h2>{playlistDetails?.name || 'Playlist'}</h2>
+                    <span>
+                      {playlistDetails?.owner?.username || video.owner.username} -{' '}
+                      {currentIndex >= 0 ? currentIndex + 1 : 0} / {playlist.length}
+                    </span>
+                  </div>
                   <button
-                    key={item._id}
-                    className={`playlist-item ${item._id === video._id ? 'active' : ''}`}
-                    onClick={() => goToVideo(item, true)}
+                    className="playlist-close"
+                    aria-label="Collapse playlist"
+                    onClick={() => setIsPlaylistCollapsed(true)}
                   >
-                    <span className="playlist-index">
-                      {item._id === video._id ? <FaPlay /> : index + 1}
-                    </span>
-                    <span className="playlist-thumb">
-                      <img src={item.thumbnail} alt="" />
-                      <span>{formatTime(item.duration)}</span>
-                    </span>
-                    <span className="playlist-copy">
-                      <strong>{item.title}</strong>
-                      <span>{item.owner.username}</span>
-                    </span>
+                    x
                   </button>
-                ))}
+                </div>
+
+                {isLoadingPlaylist ? (
+                  <div className="playlist-panel-state">Loading playlist...</div>
+                ) : playlistError ? (
+                  <div className="playlist-panel-state">{playlistError}</div>
+                ) : playlist.length === 0 ? (
+                  <div className="playlist-panel-state">No videos in this playlist.</div>
+                ) : (
+                  <div className="playlist-list">
+                    {playlist.map((item, index) => (
+                      <button
+                        key={item._id}
+                        className={`playlist-item ${item._id === video._id ? 'active' : ''}`}
+                        onClick={() => goToVideo(item, true)}
+                      >
+                        <span className="playlist-index">
+                          {item._id === video._id ? <FaPlay /> : index + 1}
+                        </span>
+                        <span className="playlist-thumb">
+                          <img src={item.thumbnail} alt="" />
+                          <span>{formatTime(item.duration)}</span>
+                        </span>
+                        <span className="playlist-copy">
+                          <strong>{item.title}</strong>
+                          <span>{item.owner.username || item.owner.fullName}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
+            )
           )}
 
-          <div className="up-next-heading">
-            <h2>Up next</h2>
-          </div>
+          {!hasPlaylistContext && (
+            <>
+              <div className="up-next-heading">
+                <h2>Up next</h2>
+              </div>
 
-          <div className="up-next-list">
-            {playlist
-              .filter((item) => item._id !== video._id)
-              .slice(0, 6)
-              .map((item) => (
-                <button
-                  key={item._id}
-                  className="up-next-card"
-                  onClick={() => goToVideo(item, false)}
-                >
-                  <span className="up-next-thumb">
-                    <img src={item.thumbnail} alt="" />
-                    <span>{formatTime(item.duration)}</span>
-                  </span>
-                  <span className="up-next-copy">
-                    <strong>{item.title}</strong>
-                    <span>{item.owner.username}</span>
-                    <span>{formatViews(item.views)} views</span>
-                  </span>
-                </button>
-              ))}
-          </div>
+              <div className="up-next-list">
+                {playlist
+                  .filter((item) => item._id !== video._id)
+                  .slice(0, 6)
+                  .map((item) => (
+                    <button
+                      key={item._id}
+                      className="up-next-card"
+                      onClick={() => goToVideo(item, false)}
+                    >
+                      <span className="up-next-thumb">
+                        <img src={item.thumbnail} alt="" />
+                        <span>{formatTime(item.duration)}</span>
+                      </span>
+                      <span className="up-next-copy">
+                        <strong>{item.title}</strong>
+                        <span>{item.owner.username}</span>
+                        <span>{formatViews(item.views)} views</span>
+                      </span>
+                    </button>
+                  ))}
+              </div>
+            </>
+          )}
         </aside>
       </main>
 
@@ -859,6 +1175,100 @@ export default function Watch() {
               <button onClick={copyShareLink}>{hasCopiedShareLink ? 'Copied' : 'Copy'}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {isSaveOpen && (
+        <div
+          className="save-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setIsSaveOpen(false)}
+        >
+          <section
+            className="save-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="save-modal-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="save-modal-header">
+              <h2 id="save-modal-title">Save to...</h2>
+              <button type="button" onClick={() => setIsSaveOpen(false)} aria-label="Close save dialog">
+                <FaTimes />
+              </button>
+            </header>
+
+            <div className="save-playlist-list">
+              {saveLoading ? (
+                <div className="save-state">Loading playlists...</div>
+              ) : saveError ? (
+                <div className="save-state error">{saveError}</div>
+              ) : savePlaylists.length === 0 ? (
+                <div className="save-state">No playlists yet</div>
+              ) : (
+                savePlaylists.map((playlistItem) => (
+                  <button
+                    key={playlistItem._id}
+                    type="button"
+                    className={`save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
+                    onClick={() => saveToPlaylist(playlistItem._id)}
+                    disabled={savingPlaylistId === playlistItem._id || playlistItem.hasCurrentVideo}
+                  >
+                    <span className="save-playlist-thumb">
+                      {playlistItem.previewVideo?.thumbnail ? (
+                        <img src={playlistItem.previewVideo.thumbnail} alt="" />
+                      ) : (
+                        <FaBookmark />
+                      )}
+                    </span>
+                    <span className="save-playlist-copy">
+                      <strong>{playlistItem.name}</strong>
+                      <span>Private</span>
+                    </span>
+                    <span className="save-bookmark-icon">
+                      <FaBookmark />
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            {showNewPlaylistForm ? (
+              <form className="new-playlist-form" onSubmit={createPlaylistAndSave}>
+                <input
+                  type="text"
+                  value={newPlaylistName}
+                  onChange={(event) => {
+                    setNewPlaylistName(event.target.value)
+                    setSaveError('')
+                  }}
+                  placeholder="Playlist name"
+                  maxLength="100"
+                  autoFocus
+                />
+                <div>
+                  <button type="button" onClick={() => setShowNewPlaylistForm(false)}>
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={creatingPlaylist}>
+                    {creatingPlaylist ? 'Creating' : 'Create'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <button
+                type="button"
+                className="new-playlist-button"
+                onClick={() => {
+                  setSaveError('')
+                  setShowNewPlaylistForm(true)
+                }}
+              >
+                <FaPlus />
+                <span>New playlist</span>
+              </button>
+            )}
+          </section>
         </div>
       )}
     </div>
