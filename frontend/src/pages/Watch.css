@@ -524,6 +524,183 @@
   min-width: 0;
 }
 
+.watch-skeleton {
+  pointer-events: none;
+}
+
+.watch-skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: #2f2f2f;
+}
+
+.watch-skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: watch-skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+.watch-skeleton-player {
+  width: 100%;
+  aspect-ratio: 16 / 8.25;
+  min-height: 360px;
+  border-radius: 14px;
+}
+
+.watch-skeleton-line {
+  display: block;
+  height: 16px;
+  border-radius: 999px;
+}
+
+.watch-skeleton-title-line {
+  width: min(680px, 72%);
+  height: 30px;
+  margin: 20px 0 18px;
+}
+
+.watch-skeleton-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.watch-skeleton-channel,
+.watch-skeleton-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.watch-skeleton-avatar,
+.watch-skeleton-circle {
+  display: block;
+  border-radius: 50%;
+}
+
+.watch-skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+}
+
+.watch-skeleton-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.watch-skeleton-name-line {
+  width: 168px;
+}
+
+.watch-skeleton-sub-line {
+  width: 118px;
+}
+
+.watch-skeleton-pill {
+  display: block;
+  width: 124px;
+  height: 44px;
+  border-radius: 999px;
+}
+
+.watch-skeleton-circle {
+  width: 44px;
+  height: 44px;
+}
+
+.watch-skeleton-description {
+  width: 100%;
+  height: 92px;
+  margin-top: 22px;
+  border-radius: 8px;
+}
+
+.watch-skeleton-side-title {
+  width: 118px;
+  height: 22px;
+  margin: 18px 0 14px;
+}
+
+.watch-skeleton-up-next {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.watch-skeleton-card {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 94px;
+}
+
+.watch-skeleton-thumb {
+  display: block;
+  width: 168px;
+  aspect-ratio: 16 / 9;
+  border-radius: 6px;
+}
+
+.watch-skeleton-card-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.watch-skeleton-card-title {
+  width: 92%;
+}
+
+.watch-skeleton-card-small {
+  width: 62%;
+  height: 14px;
+}
+
+.watch-skeleton-card-small.short {
+  width: 44%;
+}
+
+.watch-error-state {
+  max-width: 520px;
+  align-self: flex-start;
+  padding: 28px;
+  border-radius: 8px;
+  background: var(--watch-surface);
+}
+
+.watch-error-state h1 {
+  margin: 0 0 10px;
+  font-size: 1.45rem;
+}
+
+.watch-error-state p {
+  margin: 0 0 18px;
+  color: var(--watch-muted);
+}
+
+.watch-error-state button {
+  min-height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: var(--watch-bg);
+  background: var(--watch-text);
+  font-weight: 800;
+}
+
+@keyframes watch-skeleton-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .playlist-panel {
   overflow: hidden;
   border: 1px solid var(--watch-border);
@@ -750,6 +927,29 @@
     font-size: 1.2rem;
   }
 
+  .watch-skeleton-player {
+    min-height: 240px;
+    border-radius: 0;
+  }
+
+  .watch-skeleton-title-line,
+  .watch-skeleton-meta-row,
+  .watch-skeleton-description,
+  .watch-skeleton .watch-secondary {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .watch-skeleton-title-line {
+    width: calc(100% - 24px);
+    height: 24px;
+  }
+
+  .watch-skeleton-meta-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .watch-meta-row {
     align-items: flex-start;
     flex-direction: column;
@@ -778,6 +978,27 @@
 @media (max-width: 560px) {
   .watch-player-frame {
     min-height: 206px;
+  }
+
+  .watch-skeleton-player {
+    min-height: 206px;
+  }
+
+  .watch-skeleton-channel {
+    flex-wrap: wrap;
+  }
+
+  .watch-skeleton-actions {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .watch-skeleton-card {
+    grid-template-columns: 132px minmax(0, 1fr);
+  }
+
+  .watch-skeleton-thumb {
+    width: 132px;
   }
 
   .watch-controls {
