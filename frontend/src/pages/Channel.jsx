@@ -34,13 +34,13 @@ const getList = (data) => {
   return []
 }
 
-export default function Channel() {
+export default function Channel({ initialTab = 'home' }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
   const { user } = useAuth()
 
   const ownerId = channelId || user?._id
-  const [activeTab, setActiveTab] = useState('home')
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [channelUser, setChannelUser] = useState(user)
   const [channelStats, setChannelStats] = useState(null)
   const [popularVideos, setPopularVideos] = useState([])
@@ -56,6 +56,10 @@ export default function Channel() {
   const [tweetToDelete, setTweetToDelete] = useState(null)
 
   const isOwnChannel = !channelId || channelId === user?._id
+
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab])
 
   useEffect(() => {
     if (!ownerId) return undefined

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import './Sidebar.css'
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose, collapsed = false }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { user } = useAuth()
@@ -28,6 +28,55 @@ export default function Sidebar({ isOpen, onClose }) {
     }
   }
 
+  const compactItems = [
+    {
+      label: 'Home',
+      path: '/',
+      active: isActive('/'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M3 10.75 12 3l9 7.75" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 10v10h14V10" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M9 20v-6h6v6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Tweets',
+      path: '/tweets',
+      active: isActive('/tweets'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M6 13.5 17.5 4a3 3 0 0 1 2.35 5.45L8.35 19A3 3 0 0 1 6 13.5Z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8.5 11.5 15.5 16.5" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'Playlists',
+      path: '/playlists',
+      active: isActive('/playlists'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <rect x="6" y="5" width="14" height="12" rx="2" strokeWidth="2" />
+          <path d="M10 9.5 15 12l-5 2.5v-5Z" fill="currentColor" stroke="none" />
+          <path d="M4 8v12h13" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+    {
+      label: 'You',
+      path: '/channel',
+      active: isActive('/channel'),
+      icon: (
+        <svg className="sidebar-rail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <circle cx="12" cy="8" r="4" strokeWidth="2" />
+          <path d="M4 21a8 8 0 0 1 16 0" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+  ]
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -35,7 +84,23 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="sidebar-overlay" onClick={onClose}></div>
       )}
 
-      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
+        <nav className="sidebar-rail-nav" aria-label="Compact navigation">
+          {compactItems.map((item) => (
+            <button
+              key={item.path}
+              className={`sidebar-rail-item ${item.active ? 'active' : ''}`}
+              onClick={() => handleNavigate(item.path)}
+              title={item.label}
+              aria-label={item.label}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-expanded-content">
         {/* Main Menu Section */}
         <div className="sidebar-section">
           <div className="sidebar-section-title">Main</div>
@@ -57,6 +122,15 @@ export default function Sidebar({ isOpen, onClose }) {
                 <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H8l-4 4v-4H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm2 5v2h12V9H6zm0 4v2h8v-2H6z" />
               </svg>
               <span>Tweets</span>
+            </button>
+            <button
+              className={`sidebar-item ${isActive('/playlists') ? 'active' : ''}`}
+              onClick={() => handleNavigate('/playlists')}
+            >
+              <svg className="sidebar-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6h-5z" />
+              </svg>
+              <span>Playlists</span>
             </button>
           </nav>
         </div>
@@ -129,6 +203,7 @@ export default function Sidebar({ isOpen, onClose }) {
             </nav>
           </div>
         )}
+        </div>
       </aside>
     </>
   )

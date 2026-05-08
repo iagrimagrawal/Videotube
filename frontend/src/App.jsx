@@ -58,6 +58,7 @@ export default function App() {
               <Route path="/create-tweet" element={<CreateTweet />} />
               <Route path="/channel" element={<Channel />} />
               <Route path="/channel/:channelId" element={<Channel />} />
+              <Route path="/playlists" element={<Channel initialTab="playlists" />} />
               <Route path="/history" element={<History />} />
               <Route path="/watch/:id" element={<Watch />} />
               <Route path="/upload" element={<Upload />} />
