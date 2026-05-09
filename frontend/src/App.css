@@ -36,6 +36,72 @@ body,
   height: 100%;
 }
 
+.backend-status-screen {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #0f0f0f;
+}
+
+.backend-status-card {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid #303030;
+  border-radius: 12px;
+  color: #f1f1f1;
+  background: #181818;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+}
+
+.backend-status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.backend-status-dot.checking {
+  background: #f5c542;
+  box-shadow: 0 0 0 6px rgba(245, 197, 66, 0.16);
+}
+
+.backend-status-dot.offline {
+  background: #f1425d;
+  box-shadow: 0 0 0 6px rgba(241, 66, 93, 0.16);
+}
+
+.backend-status-card h1 {
+  margin: 4px 0 0;
+  font-size: 1.7rem;
+  line-height: 1.15;
+}
+
+.backend-status-card p {
+  margin: 0;
+  color: #b8b8b8;
+  line-height: 1.5;
+}
+
+.backend-status-card button {
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 0 18px;
+  border-radius: 999px;
+  color: #fff;
+  background: #f1425d;
+  font-weight: 900;
+}
+
+.backend-status-card button:hover {
+  background: #d93650;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-container {

@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  FaCog,
   FaEdit,
   FaEllipsisV,
   FaGlobe,
   FaImage,
   FaListUl,
   FaLock,
-  FaPlay,
   FaSearch,
   FaTimes,
   FaTrash,
@@ -46,6 +44,8 @@ const getList = (data) => {
   if (Array.isArray(data?.tweets)) return data.tweets
   return []
 }
+
+const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value || '')
 
 export default function Channel({ initialTab = 'home' }) {
   const navigate = useNavigate()
@@ -85,8 +85,26 @@ export default function Channel({ initialTab = 'home' }) {
   const [updatingVisibility, setUpdatingVisibility] = useState(false)
   const [profileImageError, setProfileImageError] = useState('')
   const [updatingProfileImage, setUpdatingProfileImage] = useState('')
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false)
+  const [nameValue, setNameValue] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [nameSuccess, setNameSuccess] = useState('')
+  const [changingName, setChangingName] = useState(false)
+  const [subscribersModalOpen, setSubscribersModalOpen] = useState(false)
+  const [subscribers, setSubscribers] = useState([])
+  const [subscribersError, setSubscribersError] = useState('')
+  const [isLoadingSubscribers, setIsLoadingSubscribers] = useState(false)
 
-  const isOwnChannel = !channelId || channelId === user?._id
+  const isOwnChannel = !channelId || channelId === user?._id || channelId === user?.username
 
   useEffect(() => {
     setActiveTab(initialTab)
@@ -124,26 +142,32 @@ export default function Channel({ initialTab = 'home' }) {
         let statsResponse = null
         let playlistsResponse = null
         let tweetsResponse = null
+        let profileResponse = null
 
         if (isOwnChannel) {
-          ;[currentUserResponse, videosResponse, statsResponse, playlistsResponse, tweetsResponse] =
+          ;[currentUserResponse, profileResponse, videosResponse, statsResponse, playlistsResponse, tweetsResponse] =
             await Promise.all([
               apiClient.get('/users/current-user'),
+              apiClient.get(`/users/user-profile/${user?.username}`),
               apiClient.get('/dashboard/videos'),
               apiClient.get('/dashboard/stats'),
               apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
               apiClient.get(`/tweet/user/${ownerId}`),
             ])
         } else {
+          profileResponse = await apiClient.get(`/users/user-profile/${channelId}`)
+
+          const contentOwnerId = profileResponse?.data?.data?._id || ownerId
+
           ;[popularResponse, videosResponse, playlistsResponse, tweetsResponse] = await Promise.all([
             apiClient.get('/videos', {
-              params: { userId: ownerId, limit: 50, sortBy: 'views', sortType: 'desc' },
+              params: { userId: contentOwnerId, limit: 50, sortBy: 'views', sortType: 'desc' },
             }),
             apiClient.get('/videos', {
-              params: { userId: ownerId, limit: 50, sortBy: 'createdAt', sortType: 'desc' },
+              params: { userId: contentOwnerId, limit: 50, sortBy: 'createdAt', sortType: 'desc' },
             }),
-            apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
-            apiClient.get(`/tweet/user/${ownerId}`),
+            apiClient.get(`/playlist/user/${contentOwnerId}`, { params: { limit: 50 } }),
+            apiClient.get(`/tweet/user/${contentOwnerId}`),
           ])
         }
 
@@ -156,13 +180,27 @@ export default function Channel({ initialTab = 'home' }) {
         const nextPlaylists = getList(playlistsResponse.data.data)
         const nextTweets = getList(tweetsResponse.data.data)
         const nextStats = statsResponse?.data?.data || null
-        const nextUser =
+        let nextUser =
+          profileResponse?.data?.data ||
           currentUserResponse?.data?.data ||
           nextVideos[0]?.owner ||
           nextPopularVideos[0]?.owner ||
           nextPlaylists[0]?.owner ||
           nextTweets[0]?.owner ||
           user
+
+        if (!profileResponse && nextUser?.username) {
+          try {
+            profileResponse = await apiClient.get(`/users/user-profile/${nextUser.username}`)
+            if (!isMounted) return
+            nextUser = {
+              ...nextUser,
+              ...profileResponse.data.data,
+            }
+          } catch (profileError) {
+            console.error('Unable to load channel profile:', profileError)
+          }
+        }
 
         setChannelUser({
           ...nextUser,
@@ -188,7 +226,7 @@ export default function Channel({ initialTab = 'home' }) {
     return () => {
       isMounted = false
     }
-  }, [isOwnChannel, ownerId, user])
+  }, [channelId, isOwnChannel, ownerId, user])
 
   const featuredVideos = useMemo(() => popularVideos.slice(0, 8), [popularVideos])
 
@@ -231,6 +269,187 @@ export default function Channel({ initialTab = 'home' }) {
     } finally {
       setUpdatingProfileImage('')
     }
+  }
+
+  const openPasswordModal = () => {
+    setPasswordForm({
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setPasswordError('')
+    setPasswordSuccess('')
+    setIsPasswordModalOpen(true)
+  }
+
+  const closePasswordModal = () => {
+    if (changingPassword) return
+
+    setIsPasswordModalOpen(false)
+    setPasswordForm({
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  const handlePasswordFieldChange = (event) => {
+    const { name, value } = event.target
+    setPasswordForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }))
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  const changePassword = async (event) => {
+    event.preventDefault()
+
+    if (changingPassword) return
+
+    const oldPassword = passwordForm.oldPassword.trim()
+    const newPassword = passwordForm.newPassword.trim()
+    const confirmPassword = passwordForm.confirmPassword.trim()
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required.')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirm password do not match.')
+      return
+    }
+
+    if (oldPassword === newPassword) {
+      setPasswordError('New password must be different from old password.')
+      return
+    }
+
+    setChangingPassword(true)
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    try {
+      await apiClient.post('/users/change-password', {
+        oldPassword,
+        newPassword,
+      })
+      setPasswordSuccess('Password changed successfully.')
+      setPasswordForm({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+    } catch (changeError) {
+      console.error('Unable to change password:', changeError)
+      setPasswordError(changeError.response?.data?.message || 'Unable to change password.')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const openNameModal = () => {
+    setNameValue(channelUser?.fullName || '')
+    setNameError('')
+    setNameSuccess('')
+    setIsNameModalOpen(true)
+  }
+
+  const closeNameModal = () => {
+    if (changingName) return
+
+    setIsNameModalOpen(false)
+    setNameValue('')
+    setNameError('')
+    setNameSuccess('')
+  }
+
+  const changeName = async (event) => {
+    event.preventDefault()
+
+    if (changingName) return
+
+    const fullName = nameValue.trim()
+
+    if (!fullName) {
+      setNameError('Name is required.')
+      return
+    }
+
+    if (fullName.length > 80) {
+      setNameError('Name should not exceed 80 characters.')
+      return
+    }
+
+    if (fullName === channelUser?.fullName) {
+      setNameError('Enter a different name before saving.')
+      return
+    }
+
+    setChangingName(true)
+    setNameError('')
+    setNameSuccess('')
+
+    try {
+      const response = await apiClient.patch('/users/update-account', { fullName })
+      const updatedUser = response.data.data
+      const nextUser = {
+        ...user,
+        ...channelUser,
+        ...updatedUser,
+      }
+
+      setChannelUser(nextUser)
+      setAuthUser(nextUser)
+      localStorage.setItem('user', JSON.stringify(nextUser))
+      setNameSuccess('Name changed successfully.')
+    } catch (changeError) {
+      console.error('Unable to change name:', changeError)
+      setNameError(changeError.response?.data?.message || 'Unable to change name.')
+    } finally {
+      setChangingName(false)
+    }
+  }
+
+  const openSubscribersModal = async () => {
+    const channelUserId = channelUser?._id
+
+    if (!channelUserId || isLoadingSubscribers) return
+
+    setSubscribersModalOpen(true)
+    setIsLoadingSubscribers(true)
+    setSubscribersError('')
+
+    try {
+      const response = await apiClient.get(`/subscription/c/${channelUserId}`, {
+        params: { limit: 50 },
+      })
+      setSubscribers(response.data.data?.subscribers || [])
+      setChannelUser((currentUser) => ({
+        ...currentUser,
+        subscriberCount: response.data.data?.subscriberCount ?? currentUser?.subscriberCount ?? 0,
+      }))
+    } catch (subscriberError) {
+      console.error('Unable to load subscribers:', subscriberError)
+      setSubscribersError(subscriberError.response?.data?.message || 'Unable to load subscribers.')
+    } finally {
+      setIsLoadingSubscribers(false)
+    }
+  }
+
+  const closeSubscribersModal = () => {
+    setSubscribersModalOpen(false)
+    setSubscribers([])
+    setSubscribersError('')
   }
 
   const openVideoUpdateDialog = (video, mode) => {
@@ -812,7 +1031,14 @@ export default function Channel({ initialTab = 'home' }) {
               <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
               <p>
                 <strong>@{channelUser?.username || 'user'}</strong>
-                <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
+                <button
+                  type="button"
+                  className="channel-subscriber-link"
+                  onClick={openSubscribersModal}
+                  disabled={!channelUser?._id || isLoadingSubscribers}
+                >
+                  - {formatCount(channelUser?.subscriberCount)} subscribers
+                </button>
                 <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
                 {isOwnChannel && channelStats && (
                   <>
@@ -825,13 +1051,13 @@ export default function Channel({ initialTab = 'home' }) {
               {profileImageError && <p className="channel-profile-error">{profileImageError}</p>}
               {isOwnChannel && (
                 <div className="channel-actions">
-                  <button type="button">
-                    <FaCog />
-                    <span>Customize channel</span>
+                  <button type="button" onClick={openPasswordModal}>
+                    <FaLock />
+                    <span>Change password</span>
                   </button>
-                  <button type="button" onClick={() => navigate('/upload')}>
-                    <FaPlay />
-                    <span>Manage videos</span>
+                  <button type="button" onClick={openNameModal}>
+                    <FaEdit />
+                    <span>Change name</span>
                   </button>
                 </div>
               )}
@@ -950,6 +1176,207 @@ export default function Channel({ initialTab = 'home' }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {isPasswordModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closePasswordModal}
+        >
+          <form
+            className="channel-video-update-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-password-title"
+            onSubmit={changePassword}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-password-title">Change password</h2>
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                aria-label="Close change password dialog"
+                disabled={changingPassword}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {passwordError && <div className="channel-video-update-error">{passwordError}</div>}
+            {passwordSuccess && <div className="channel-password-success">{passwordSuccess}</div>}
+
+            <div className="channel-password-fields">
+              <label className="channel-video-update-field">
+                <span>Old password</span>
+                <input
+                  type="password"
+                  name="oldPassword"
+                  value={passwordForm.oldPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </label>
+
+              <label className="channel-video-update-field">
+                <span>New password</span>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordForm.newPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="new-password"
+                />
+              </label>
+
+              <label className="channel-video-update-field">
+                <span>Confirm password</span>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordForm.confirmPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="new-password"
+                />
+              </label>
+            </div>
+
+            <div className="channel-video-update-actions">
+              <button type="button" onClick={closePasswordModal} disabled={changingPassword}>
+                Cancel
+              </button>
+              <button type="submit" disabled={changingPassword}>
+                {changingPassword ? 'Changing' : 'Change password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isNameModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closeNameModal}
+        >
+          <form
+            className="channel-video-update-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-name-title"
+            onSubmit={changeName}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-name-title">Change name</h2>
+              <button
+                type="button"
+                onClick={closeNameModal}
+                aria-label="Close change name dialog"
+                disabled={changingName}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {nameError && <div className="channel-video-update-error">{nameError}</div>}
+            {nameSuccess && <div className="channel-password-success">{nameSuccess}</div>}
+
+            <label className="channel-video-update-field">
+              <span>Name</span>
+              <input
+                type="text"
+                value={nameValue}
+                onChange={(event) => {
+                  setNameValue(event.target.value)
+                  setNameError('')
+                  setNameSuccess('')
+                }}
+                maxLength={80}
+                autoComplete="name"
+                autoFocus
+              />
+            </label>
+
+            <div className="channel-video-update-actions">
+              <button type="button" onClick={closeNameModal} disabled={changingName}>
+                Cancel
+              </button>
+              <button type="submit" disabled={changingName}>
+                {changingName ? 'Saving' : 'Save name'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {subscribersModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closeSubscribersModal}
+        >
+          <div
+            className="channel-confirm-modal channel-subscribers-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-subscribers-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-subscribers-title">Subscribers</h2>
+              <button
+                type="button"
+                onClick={closeSubscribersModal}
+                aria-label="Close subscribers dialog"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {subscribersError && <div className="channel-video-update-error">{subscribersError}</div>}
+
+            {isLoadingSubscribers ? (
+              <div className="channel-subscribers-empty">Loading subscribers...</div>
+            ) : subscribers.length === 0 ? (
+              <div className="channel-subscribers-empty">No subscribers yet.</div>
+            ) : (
+              <div className="channel-subscribers-list">
+                {subscribers.map((subscription) => {
+                  const subscriber = subscription.subscriber
+
+                  if (!subscriber) return null
+
+                  return (
+                    <button
+                      key={subscription._id || subscriber._id}
+                      type="button"
+                      className="channel-subscriber-row"
+                      onClick={() => {
+                        closeSubscribersModal()
+                        navigate(`/channel/${subscriber._id}`)
+                      }}
+                    >
+                      <span className="channel-subscriber-avatar">
+                        {subscriber.avatar ? (
+                          <img src={subscriber.avatar} alt="" />
+                        ) : (
+                          <span>{subscriber.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+                        )}
+                      </span>
+                      <span>
+                        <strong>{subscriber.fullName || subscriber.username || 'Subscriber'}</strong>
+                        <em>@{subscriber.username || 'user'}</em>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

@@ -46,12 +46,16 @@ export default function Home() {
       })
 
       const uploadedVideos = normalizeUploadedVideos(response.data.data)
-      const mockVideos = generateMockVideos(Math.max(HOME_VIDEO_LIMIT - uploadedVideos.length, 0))
 
-      setVideos([...uploadedVideos, ...mockVideos])
+      setVideos(uploadedVideos)
     } catch (err) {
       console.error('Error fetching videos:', err)
-      setVideos(generateMockVideos(HOME_VIDEO_LIMIT))
+      setVideos([])
+      setError(
+        err.code === 'ERR_NETWORK'
+          ? 'Backend server is not running or cannot be reached.'
+          : err.response?.data?.message || 'Unable to load videos right now.'
+      )
     } finally {
       setIsLoading(false)
     }
@@ -71,23 +75,6 @@ export default function Home() {
         ...video,
         uploadedAt: video.createdAt || video.uploadedAt,
       }))
-  }
-
-  const generateMockVideos = (count) => {
-    return Array.from({ length: count }, (_, i) => ({
-      _id: `mock-video-${i + 1}`,
-      title: `Suggested Video ${i + 1}`,
-      description: `This is an awesome video featuring great content`,
-      thumbnail: `https://picsum.photos/seed/home-suggestion-${i + 1}/320/180`,
-      duration: `${Math.floor(Math.random() * 60) + 1}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
-      views: `${Math.floor(Math.random() * 1000000) + 1000}`,
-      uploadedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-      owner: {
-        _id: `channel-${i + 1}`,
-        username: `Channel${i + 1}`,
-        avatar: `https://picsum.photos/48/48?random=${i + 100}`,
-      },
-    }))
   }
 
   const filters = ['all', 'trending', 'new', 'subscriptions']
