@@ -10,6 +10,7 @@ import Tweets from './pages/Tweets'
 import CreateTweet from './pages/CreateTweet'
 import Channel from './pages/Channel'
 import History from './pages/History'
+import LikedVideos from './pages/LikedVideos'
 import Playlists from './pages/Playlists'
 import PlaylistDetail from './pages/PlaylistDetail'
 import './App.css'
@@ -63,6 +64,7 @@ export default function App() {
               <Route path="/playlists" element={<Playlists />} />
               <Route path="/playlists/:playlistId" element={<PlaylistDetail />} />
               <Route path="/history" element={<History />} />
+              <Route path="/liked-videos" element={<LikedVideos />} />
               <Route path="/watch/:id" element={<Watch />} />
               <Route path="/upload" element={<Upload />} />
               {/* <Route path="/search" element={<Search />} />
