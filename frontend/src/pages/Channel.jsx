@@ -45,6 +45,8 @@ const getList = (data) => {
   return []
 }
 
+const isObjectId = (value) => /^[a-f\d]{24}$/i.test(value || '')
+
 export default function Channel({ initialTab = 'home' }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
@@ -97,8 +99,12 @@ export default function Channel({ initialTab = 'home' }) {
   const [nameError, setNameError] = useState('')
   const [nameSuccess, setNameSuccess] = useState('')
   const [changingName, setChangingName] = useState(false)
+  const [subscribersModalOpen, setSubscribersModalOpen] = useState(false)
+  const [subscribers, setSubscribers] = useState([])
+  const [subscribersError, setSubscribersError] = useState('')
+  const [isLoadingSubscribers, setIsLoadingSubscribers] = useState(false)
 
-  const isOwnChannel = !channelId || channelId === user?._id
+  const isOwnChannel = !channelId || channelId === user?._id || channelId === user?.username
 
   useEffect(() => {
     setActiveTab(initialTab)
@@ -136,26 +142,32 @@ export default function Channel({ initialTab = 'home' }) {
         let statsResponse = null
         let playlistsResponse = null
         let tweetsResponse = null
+        let profileResponse = null
 
         if (isOwnChannel) {
-          ;[currentUserResponse, videosResponse, statsResponse, playlistsResponse, tweetsResponse] =
+          ;[currentUserResponse, profileResponse, videosResponse, statsResponse, playlistsResponse, tweetsResponse] =
             await Promise.all([
               apiClient.get('/users/current-user'),
+              apiClient.get(`/users/user-profile/${user?.username}`),
               apiClient.get('/dashboard/videos'),
               apiClient.get('/dashboard/stats'),
               apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
               apiClient.get(`/tweet/user/${ownerId}`),
             ])
         } else {
+          profileResponse = await apiClient.get(`/users/user-profile/${channelId}`)
+
+          const contentOwnerId = profileResponse?.data?.data?._id || ownerId
+
           ;[popularResponse, videosResponse, playlistsResponse, tweetsResponse] = await Promise.all([
             apiClient.get('/videos', {
-              params: { userId: ownerId, limit: 50, sortBy: 'views', sortType: 'desc' },
+              params: { userId: contentOwnerId, limit: 50, sortBy: 'views', sortType: 'desc' },
             }),
             apiClient.get('/videos', {
-              params: { userId: ownerId, limit: 50, sortBy: 'createdAt', sortType: 'desc' },
+              params: { userId: contentOwnerId, limit: 50, sortBy: 'createdAt', sortType: 'desc' },
             }),
-            apiClient.get(`/playlist/user/${ownerId}`, { params: { limit: 50 } }),
-            apiClient.get(`/tweet/user/${ownerId}`),
+            apiClient.get(`/playlist/user/${contentOwnerId}`, { params: { limit: 50 } }),
+            apiClient.get(`/tweet/user/${contentOwnerId}`),
           ])
         }
 
@@ -168,13 +180,27 @@ export default function Channel({ initialTab = 'home' }) {
         const nextPlaylists = getList(playlistsResponse.data.data)
         const nextTweets = getList(tweetsResponse.data.data)
         const nextStats = statsResponse?.data?.data || null
-        const nextUser =
+        let nextUser =
+          profileResponse?.data?.data ||
           currentUserResponse?.data?.data ||
           nextVideos[0]?.owner ||
           nextPopularVideos[0]?.owner ||
           nextPlaylists[0]?.owner ||
           nextTweets[0]?.owner ||
           user
+
+        if (!profileResponse && nextUser?.username) {
+          try {
+            profileResponse = await apiClient.get(`/users/user-profile/${nextUser.username}`)
+            if (!isMounted) return
+            nextUser = {
+              ...nextUser,
+              ...profileResponse.data.data,
+            }
+          } catch (profileError) {
+            console.error('Unable to load channel profile:', profileError)
+          }
+        }
 
         setChannelUser({
           ...nextUser,
@@ -200,7 +226,7 @@ export default function Channel({ initialTab = 'home' }) {
     return () => {
       isMounted = false
     }
-  }, [isOwnChannel, ownerId, user])
+  }, [channelId, isOwnChannel, ownerId, user])
 
   const featuredVideos = useMemo(() => popularVideos.slice(0, 8), [popularVideos])
 
@@ -392,6 +418,38 @@ export default function Channel({ initialTab = 'home' }) {
     } finally {
       setChangingName(false)
     }
+  }
+
+  const openSubscribersModal = async () => {
+    const channelUserId = channelUser?._id
+
+    if (!channelUserId || isLoadingSubscribers) return
+
+    setSubscribersModalOpen(true)
+    setIsLoadingSubscribers(true)
+    setSubscribersError('')
+
+    try {
+      const response = await apiClient.get(`/subscription/c/${channelUserId}`, {
+        params: { limit: 50 },
+      })
+      setSubscribers(response.data.data?.subscribers || [])
+      setChannelUser((currentUser) => ({
+        ...currentUser,
+        subscriberCount: response.data.data?.subscriberCount ?? currentUser?.subscriberCount ?? 0,
+      }))
+    } catch (subscriberError) {
+      console.error('Unable to load subscribers:', subscriberError)
+      setSubscribersError(subscriberError.response?.data?.message || 'Unable to load subscribers.')
+    } finally {
+      setIsLoadingSubscribers(false)
+    }
+  }
+
+  const closeSubscribersModal = () => {
+    setSubscribersModalOpen(false)
+    setSubscribers([])
+    setSubscribersError('')
   }
 
   const openVideoUpdateDialog = (video, mode) => {
@@ -973,7 +1031,14 @@ export default function Channel({ initialTab = 'home' }) {
               <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
               <p>
                 <strong>@{channelUser?.username || 'user'}</strong>
-                <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
+                <button
+                  type="button"
+                  className="channel-subscriber-link"
+                  onClick={openSubscribersModal}
+                  disabled={!channelUser?._id || isLoadingSubscribers}
+                >
+                  - {formatCount(channelUser?.subscriberCount)} subscribers
+                </button>
                 <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
                 {isOwnChannel && channelStats && (
                   <>
@@ -1245,6 +1310,73 @@ export default function Channel({ initialTab = 'home' }) {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {subscribersModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closeSubscribersModal}
+        >
+          <div
+            className="channel-confirm-modal channel-subscribers-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-subscribers-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-subscribers-title">Subscribers</h2>
+              <button
+                type="button"
+                onClick={closeSubscribersModal}
+                aria-label="Close subscribers dialog"
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {subscribersError && <div className="channel-video-update-error">{subscribersError}</div>}
+
+            {isLoadingSubscribers ? (
+              <div className="channel-subscribers-empty">Loading subscribers...</div>
+            ) : subscribers.length === 0 ? (
+              <div className="channel-subscribers-empty">No subscribers yet.</div>
+            ) : (
+              <div className="channel-subscribers-list">
+                {subscribers.map((subscription) => {
+                  const subscriber = subscription.subscriber
+
+                  if (!subscriber) return null
+
+                  return (
+                    <button
+                      key={subscription._id || subscriber._id}
+                      type="button"
+                      className="channel-subscriber-row"
+                      onClick={() => {
+                        closeSubscribersModal()
+                        navigate(`/channel/${subscriber._id}`)
+                      }}
+                    >
+                      <span className="channel-subscriber-avatar">
+                        {subscriber.avatar ? (
+                          <img src={subscriber.avatar} alt="" />
+                        ) : (
+                          <span>{subscriber.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+                        )}
+                      </span>
+                      <span>
+                        <strong>{subscriber.fullName || subscriber.username || 'Subscriber'}</strong>
+                        <em>@{subscriber.username || 'user'}</em>
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
