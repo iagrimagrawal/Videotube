@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   FaCog,
@@ -15,6 +15,7 @@ import {
 } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthStore } from '../store/authStore'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
 import './Channel.css'
@@ -50,6 +51,9 @@ export default function Channel({ initialTab = 'home' }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
   const { user } = useAuth()
+  const setAuthUser = useAuthStore((state) => state.setUser)
+  const coverInputRef = useRef(null)
+  const avatarInputRef = useRef(null)
 
   const ownerId = channelId || user?._id
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -79,6 +83,8 @@ export default function Channel({ initialTab = 'home' }) {
   const [videoVisibilityTarget, setVideoVisibilityTarget] = useState(null)
   const [videoVisibilityNotice, setVideoVisibilityNotice] = useState(null)
   const [updatingVisibility, setUpdatingVisibility] = useState(false)
+  const [profileImageError, setProfileImageError] = useState('')
+  const [updatingProfileImage, setUpdatingProfileImage] = useState('')
 
   const isOwnChannel = !channelId || channelId === user?._id
 
@@ -185,6 +191,47 @@ export default function Channel({ initialTab = 'home' }) {
   }, [isOwnChannel, ownerId, user])
 
   const featuredVideos = useMemo(() => popularVideos.slice(0, 8), [popularVideos])
+
+  const updateProfileImage = async (event, imageType) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || updatingProfileImage) return
+
+    if (!file.type.startsWith('image/')) {
+      setProfileImageError('Choose a valid image file.')
+      return
+    }
+
+    const fieldName = imageType === 'avatar' ? 'avatar' : 'coverImage'
+    const endpoint = imageType === 'avatar' ? '/users/update-avatar' : '/users/update-cover-image'
+    const formData = new FormData()
+    formData.append(fieldName, file)
+
+    setUpdatingProfileImage(imageType)
+    setProfileImageError('')
+
+    try {
+      const response = await apiClient.patch(endpoint, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      const updatedUser = response.data.data
+      const nextUser = {
+        ...user,
+        ...channelUser,
+        ...updatedUser,
+      }
+
+      setChannelUser(nextUser)
+      setAuthUser(nextUser)
+      localStorage.setItem('user', JSON.stringify(nextUser))
+    } catch (uploadError) {
+      console.error(`Unable to update ${imageType}:`, uploadError)
+      setProfileImageError(uploadError.response?.data?.message || `Unable to update ${imageType}.`)
+    } finally {
+      setUpdatingProfileImage('')
+    }
+  }
 
   const openVideoUpdateDialog = (video, mode) => {
     setOpenVideoMenuId('')
@@ -708,6 +755,27 @@ export default function Channel({ initialTab = 'home' }) {
             {channelUser?.coverImage && (
               <img src={channelUser.coverImage} alt="" />
             )}
+            {isOwnChannel && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="channel-image-input"
+                  onChange={(event) => updateProfileImage(event, 'cover')}
+                />
+                <button
+                  type="button"
+                  className="channel-image-edit channel-cover-edit"
+                  aria-label="Update cover image"
+                  title="Update cover image"
+                  disabled={Boolean(updatingProfileImage)}
+                  onClick={() => coverInputRef.current?.click()}
+                >
+                  <FaEdit />
+                </button>
+              </>
+            )}
           </div>
 
           <div className="channel-hero-details">
@@ -716,6 +784,27 @@ export default function Channel({ initialTab = 'home' }) {
                 <img src={channelUser.avatar} alt={channelUser.fullName || channelUser.username} />
               ) : (
                 <span>{channelUser?.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+              )}
+              {isOwnChannel && (
+                <>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="channel-image-input"
+                    onChange={(event) => updateProfileImage(event, 'avatar')}
+                  />
+                  <button
+                    type="button"
+                    className="channel-image-edit channel-avatar-edit"
+                    aria-label="Update avatar"
+                    title="Update avatar"
+                    disabled={Boolean(updatingProfileImage)}
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    <FaEdit />
+                  </button>
+                </>
               )}
             </div>
 
@@ -733,6 +822,7 @@ export default function Channel({ initialTab = 'home' }) {
                 )}
               </p>
               <p className="channel-about">More about this channel</p>
+              {profileImageError && <p className="channel-profile-error">{profileImageError}</p>}
               {isOwnChannel && (
                 <div className="channel-actions">
                   <button type="button">
