@@ -77,6 +77,7 @@ export default function Channel({ initialTab = 'home' }) {
   const [videoToDelete, setVideoToDelete] = useState(null)
   const [deletingVideo, setDeletingVideo] = useState(false)
   const [videoVisibilityTarget, setVideoVisibilityTarget] = useState(null)
+  const [videoVisibilityNotice, setVideoVisibilityNotice] = useState(null)
   const [updatingVisibility, setUpdatingVisibility] = useState(false)
 
   const isOwnChannel = !channelId || channelId === user?._id
@@ -257,6 +258,12 @@ export default function Channel({ initialTab = 'home' }) {
   const openVisibilityConfirm = (video, nextIsPublished) => {
     setOpenVideoMenuId('')
     setVideoActionError('')
+
+    if (Boolean(video.isPublished) === nextIsPublished) {
+      setVideoVisibilityNotice(nextIsPublished ? 'This video is already public.' : 'This video is already private.')
+      return
+    }
+
     setVideoVisibilityTarget({ video, nextIsPublished })
   }
 
@@ -697,42 +704,48 @@ export default function Channel({ initialTab = 'home' }) {
 
       <main className="channel-main">
         <section className="channel-hero">
-          <div className="channel-avatar-wrap">
-            {channelUser?.avatar ? (
-              <img src={channelUser.avatar} alt={channelUser.fullName || channelUser.username} />
-            ) : (
-              <span>{channelUser?.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+          <div className={`channel-cover ${channelUser?.coverImage ? 'has-cover' : ''}`}>
+            {channelUser?.coverImage && (
+              <img src={channelUser.coverImage} alt="" />
             )}
           </div>
 
-          <div className="channel-hero-copy">
-            <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
-            <p>
-              <strong>@{channelUser?.username || 'user'}</strong>
-              <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
-              <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
-              {isOwnChannel && channelStats && (
-                <>
-                  <span>- {formatCount(channelStats.totalViews)} views</span>
-                  <span>- {formatCount(channelStats.totalLikes)} likes</span>
-                </>
+          <div className="channel-hero-details">
+            <div className="channel-avatar-wrap">
+              {channelUser?.avatar ? (
+                <img src={channelUser.avatar} alt={channelUser.fullName || channelUser.username} />
+              ) : (
+                <span>{channelUser?.fullName?.charAt(0).toUpperCase() || 'U'}</span>
               )}
-            </p>
-            <p className="channel-about">
-              {channelUser?.coverImage ? 'More about this channel' : 'More about this channel ...more'}
-            </p>
-            {isOwnChannel && (
-              <div className="channel-actions">
-                <button type="button">
-                  <FaCog />
-                  <span>Customize channel</span>
-                </button>
-                <button type="button" onClick={() => navigate('/upload')}>
-                  <FaPlay />
-                  <span>Manage videos</span>
-                </button>
-              </div>
-            )}
+            </div>
+
+            <div className="channel-hero-copy">
+              <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
+              <p>
+                <strong>@{channelUser?.username || 'user'}</strong>
+                <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
+                <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
+                {isOwnChannel && channelStats && (
+                  <>
+                    <span>- {formatCount(channelStats.totalViews)} views</span>
+                    <span>- {formatCount(channelStats.totalLikes)} likes</span>
+                  </>
+                )}
+              </p>
+              <p className="channel-about">More about this channel</p>
+              {isOwnChannel && (
+                <div className="channel-actions">
+                  <button type="button">
+                    <FaCog />
+                    <span>Customize channel</span>
+                  </button>
+                  <button type="button" onClick={() => navigate('/upload')}>
+                    <FaPlay />
+                    <span>Manage videos</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -941,6 +954,33 @@ export default function Channel({ initialTab = 'home' }) {
                 disabled={updatingVisibility}
               >
                 {updatingVisibility ? 'Updating' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {videoVisibilityNotice && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setVideoVisibilityNotice(null)}
+        >
+          <div
+            className="channel-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>{videoVisibilityNotice}</h2>
+            <p>Choose a different visibility option to change who can see this video.</p>
+            <div className="channel-confirm-actions">
+              <button
+                type="button"
+                className="channel-confirm-save"
+                onClick={() => setVideoVisibilityNotice(null)}
+              >
+                OK
               </button>
             </div>
           </div>
