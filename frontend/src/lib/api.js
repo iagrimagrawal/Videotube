@@ -11,6 +11,14 @@ const apiClient = axios.create({
   },
 })
 
+let refreshTokenRequest = null
+
+const clearStoredSession = () => {
+  localStorage.removeItem('accessToken')
+  localStorage.removeItem('refreshToken')
+  localStorage.removeItem('user')
+}
+
 // Request interceptor - add token
 apiClient.interceptors.request.use(
   (config) => {
@@ -26,12 +34,46 @@ apiClient.interceptors.request.use(
 // Response interceptor - handle errors
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('accessToken')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+  async (error) => {
+    const originalRequest = error.config
+    const isAuthError = error.response?.status === 401
+    const isRefreshRequest = originalRequest?.url?.includes('/users/refresh-token')
+
+    if (isAuthError && originalRequest && !originalRequest._retry && !isRefreshRequest) {
+      originalRequest._retry = true
+
+      try {
+        if (!refreshTokenRequest) {
+          const refreshToken = localStorage.getItem('refreshToken')
+          refreshTokenRequest = apiClient.post('/users/refresh-token', { refreshToken })
+        }
+
+        const response = await refreshTokenRequest
+        const { accessToken, refreshToken } = response.data.data
+
+        localStorage.setItem('accessToken', accessToken)
+        localStorage.setItem('refreshToken', refreshToken)
+
+        originalRequest.headers = originalRequest.headers || {}
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`
+
+        return apiClient(originalRequest)
+      } catch (refreshError) {
+        clearStoredSession()
+        window.location.href = '/login'
+        return Promise.reject(refreshError)
+      } finally {
+        refreshTokenRequest = null
+      }
     }
+
+    if (isAuthError && isRefreshRequest) {
+      clearStoredSession()
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login'
+      }
+    }
+
     return Promise.reject(error)
   }
 )
