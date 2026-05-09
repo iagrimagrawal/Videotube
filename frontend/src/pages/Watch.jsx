@@ -1265,7 +1265,7 @@ export default function Watch() {
                     setSaveError('')
                   }}
                   placeholder="Playlist name"
-                  maxLength="100"
+                  maxLength="150"
                   autoFocus
                 />
                 <textarea
@@ -1275,7 +1275,7 @@ export default function Watch() {
                     setSaveError('')
                   }}
                   placeholder="Playlist description"
-                  maxLength="500"
+                  maxLength="5000"
                   rows="3"
                 />
                 <div>

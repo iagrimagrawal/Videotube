@@ -42,6 +42,9 @@ const getVideos = (data) => {
   return data.map((item) => item.video || item).filter((video) => video?._id)
 }
 
+const MAX_PLAYLIST_TITLE_LENGTH = 150
+const MAX_PLAYLIST_DESCRIPTION_LENGTH = 5000
+
 export default function PlaylistDetail() {
   const { playlistId } = useParams()
   const navigate = useNavigate()
@@ -510,7 +513,7 @@ export default function PlaylistDetail() {
                 type="text"
                 value={editName}
                 onChange={(event) => setEditName(event.target.value)}
-                maxLength={100}
+                maxLength={MAX_PLAYLIST_TITLE_LENGTH}
                 required
               />
             </label>
@@ -520,7 +523,7 @@ export default function PlaylistDetail() {
               <textarea
                 value={editDescription}
                 onChange={(event) => setEditDescription(event.target.value)}
-                maxLength={500}
+                maxLength={MAX_PLAYLIST_DESCRIPTION_LENGTH}
                 required
               />
             </label>

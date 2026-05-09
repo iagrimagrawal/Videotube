@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FaEllipsisV, FaLayerGroup, FaListUl, FaPlay, FaRedoAlt, FaSortAlphaDown } from 'react-icons/fa'
+import {
+  FaEdit,
+  FaEllipsisV,
+  FaLayerGroup,
+  FaListUl,
+  FaPlay,
+  FaRedoAlt,
+  FaSortAlphaDown,
+  FaTimes,
+  FaTrash,
+} from 'react-icons/fa'
 import Navbar from '../components/Navbar'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
 import './Playlists.css'
+
+const MAX_PLAYLIST_TITLE_LENGTH = 150
+const MAX_PLAYLIST_DESCRIPTION_LENGTH = 5000
 
 const getPlaylistCount = (playlist) => playlist.videos?.length || playlist.videoCount || 0
 
@@ -28,6 +41,15 @@ export default function Playlists() {
   const [error, setError] = useState('')
   const [sortMode, setSortMode] = useState('az')
   const [activeFilter, setActiveFilter] = useState('Playlists')
+  const [openMenuPlaylistId, setOpenMenuPlaylistId] = useState('')
+  const [editTarget, setEditTarget] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [isSavingPlaylist, setIsSavingPlaylist] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [isDeletingPlaylist, setIsDeletingPlaylist] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     const handleResize = () => {
@@ -43,6 +65,14 @@ export default function Playlists() {
   useEffect(() => {
     fetchPlaylists()
   }, [user?._id])
+
+  useEffect(() => {
+    if (!openMenuPlaylistId) return undefined
+
+    const closeMenu = () => setOpenMenuPlaylistId('')
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [openMenuPlaylistId])
 
   const fetchPlaylists = async () => {
     if (!user?._id) return
@@ -97,6 +127,87 @@ export default function Playlists() {
 
   const openPlaylist = (playlist) => {
     navigate(`/playlists/${playlist._id}`)
+  }
+
+  const openEditDialog = (playlist) => {
+    setOpenMenuPlaylistId('')
+    setEditTarget(playlist)
+    setEditName(playlist.name || '')
+    setEditDescription(playlist.description || '')
+    setEditError('')
+  }
+
+  const closeEditDialog = () => {
+    if (isSavingPlaylist) return
+    setEditTarget(null)
+    setEditError('')
+  }
+
+  const updatePlaylist = async (event) => {
+    event.preventDefault()
+    if (!editTarget || isSavingPlaylist) return
+
+    setEditError('')
+    setIsSavingPlaylist(true)
+
+    try {
+      const response = await apiClient.patch(`/playlist/${editTarget._id}`, {
+        name: editName,
+        description: editDescription,
+      })
+      const updatedPlaylist = response.data.data
+
+      setPlaylists((currentPlaylists) =>
+        currentPlaylists.map((playlist) =>
+          playlist._id === editTarget._id
+            ? {
+                ...playlist,
+                ...updatedPlaylist,
+                videoCount: getPlaylistCount({ ...playlist, ...updatedPlaylist }),
+                previewVideo: playlist.previewVideo,
+              }
+            : playlist
+        )
+      )
+      setEditTarget(null)
+    } catch (updateError) {
+      console.error('Unable to update playlist:', updateError)
+      setEditError(updateError.response?.data?.message || 'Unable to update playlist.')
+    } finally {
+      setIsSavingPlaylist(false)
+    }
+  }
+
+  const openDeleteConfirm = (playlist) => {
+    setOpenMenuPlaylistId('')
+    setDeleteTarget(playlist)
+    setDeleteError('')
+  }
+
+  const closeDeleteConfirm = () => {
+    if (isDeletingPlaylist) return
+    setDeleteTarget(null)
+    setDeleteError('')
+  }
+
+  const deletePlaylist = async () => {
+    if (!deleteTarget || isDeletingPlaylist) return
+
+    setDeleteError('')
+    setIsDeletingPlaylist(true)
+
+    try {
+      await apiClient.delete(`/playlist/${deleteTarget._id}`)
+      setPlaylists((currentPlaylists) =>
+        currentPlaylists.filter((playlist) => playlist._id !== deleteTarget._id)
+      )
+      setDeleteTarget(null)
+    } catch (removeError) {
+      console.error('Unable to delete playlist:', removeError)
+      setDeleteError(removeError.response?.data?.message || 'Unable to delete playlist.')
+    } finally {
+      setIsDeletingPlaylist(false)
+    }
   }
 
   return (
@@ -190,9 +301,34 @@ export default function Playlists() {
                     <button type="button" className="playlist-title" onClick={() => openPlaylist(playlist)}>
                       {playlist.name}
                     </button>
-                    <button type="button" className="playlist-more" aria-label="Playlist actions">
-                      <FaEllipsisV />
-                    </button>
+                    <div className="playlist-menu-wrap" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="playlist-more"
+                        aria-label={`${playlist.name} actions`}
+                        aria-expanded={openMenuPlaylistId === playlist._id}
+                        onClick={() =>
+                          setOpenMenuPlaylistId((currentPlaylistId) =>
+                            currentPlaylistId === playlist._id ? '' : playlist._id
+                          )
+                        }
+                      >
+                        <FaEllipsisV />
+                      </button>
+
+                      {openMenuPlaylistId === playlist._id && (
+                        <div className="playlist-actions-menu">
+                          <button type="button" onClick={() => openEditDialog(playlist)}>
+                            <FaEdit />
+                            <span>Edit</span>
+                          </button>
+                          <button type="button" className="danger" onClick={() => openDeleteConfirm(playlist)}>
+                            <FaTrash />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <p>Playlist</p>
                     <span>
                       {playlist.updatedAt ? `Updated ${formatTimeAgo(playlist.updatedAt)}` : 'View full playlist'}
@@ -207,6 +343,117 @@ export default function Playlists() {
           )}
         </main>
       </div>
+
+      {editTarget && (
+        <div className="playlist-modal-backdrop" role="presentation" onMouseDown={closeEditDialog}>
+          <form
+            className="playlist-edit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="playlist-edit-title"
+            onSubmit={updatePlaylist}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="playlist-modal-header">
+              <h2 id="playlist-edit-title">Edit playlist</h2>
+              <button
+                type="button"
+                className="playlist-modal-close"
+                onClick={closeEditDialog}
+                aria-label="Close edit dialog"
+                disabled={isSavingPlaylist}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            <div className="playlist-edit-preview">
+              {editTarget.previewVideo?.thumbnail ? (
+                <img src={editTarget.previewVideo.thumbnail} alt="" />
+              ) : (
+                <span>
+                  <FaListUl />
+                </span>
+              )}
+            </div>
+
+            {editError && <div className="playlist-form-error">{editError}</div>}
+
+            <label className="playlist-edit-field">
+              <span>Title</span>
+              <input
+                type="text"
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+                maxLength={MAX_PLAYLIST_TITLE_LENGTH}
+                required
+              />
+              <strong>
+                {editName.length}/{MAX_PLAYLIST_TITLE_LENGTH}
+              </strong>
+            </label>
+
+            <label className="playlist-edit-field">
+              <span>Description</span>
+              <textarea
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+                maxLength={MAX_PLAYLIST_DESCRIPTION_LENGTH}
+                required
+              />
+              <strong>
+                {editDescription.length}/{MAX_PLAYLIST_DESCRIPTION_LENGTH}
+              </strong>
+            </label>
+
+            <div className="playlist-modal-actions">
+              <button type="button" onClick={closeEditDialog} disabled={isSavingPlaylist}>
+                Cancel
+              </button>
+              <button type="submit" disabled={isSavingPlaylist}>
+                {isSavingPlaylist ? 'Saving' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="playlist-modal-backdrop" role="presentation" onMouseDown={closeDeleteConfirm}>
+          <div
+            className="playlist-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="playlist-delete-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="playlist-modal-header compact">
+              <h2 id="playlist-delete-title">Delete playlist?</h2>
+              <button
+                type="button"
+                className="playlist-modal-close"
+                onClick={closeDeleteConfirm}
+                aria-label="Close delete dialog"
+                disabled={isDeletingPlaylist}
+              >
+                <FaTimes />
+              </button>
+            </div>
+            <p>
+              Delete <strong>{deleteTarget.name}</strong>? This action cannot be undone.
+            </p>
+            {deleteError && <div className="playlist-form-error">{deleteError}</div>}
+            <div className="playlist-modal-actions">
+              <button type="button" onClick={closeDeleteConfirm} disabled={isDeletingPlaylist}>
+                Cancel
+              </button>
+              <button type="button" className="danger" onClick={deletePlaylist} disabled={isDeletingPlaylist}>
+                {isDeletingPlaylist ? 'Deleting' : 'Confirm delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
