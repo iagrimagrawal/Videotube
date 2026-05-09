@@ -13,15 +13,33 @@ import History from './pages/History'
 import LikedVideos from './pages/LikedVideos'
 import Playlists from './pages/Playlists'
 import PlaylistDetail from './pages/PlaylistDetail'
+import apiClient from './lib/api'
 import './App.css'
 
 export default function App() {
   const { user, initAuth } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [backendStatus, setBackendStatus] = useState('checking')
 
   useEffect(() => {
     initAuth()
   }, [initAuth])
+
+  const checkBackendStatus = async () => {
+    setBackendStatus('checking')
+
+    try {
+      await apiClient.get('/healthcheck', { timeout: 5000 })
+      setBackendStatus('online')
+    } catch (error) {
+      console.error('Backend is not reachable:', error)
+      setBackendStatus('offline')
+    }
+  }
+
+  useEffect(() => {
+    checkBackendStatus()
+  }, [])
 
   // Close sidebar on route change
   useEffect(() => {
@@ -39,6 +57,33 @@ export default function App() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  if (backendStatus === 'checking') {
+    return (
+      <div className="backend-status-screen">
+        <div className="backend-status-card">
+          <span className="backend-status-dot checking" />
+          <h1>Connecting to VideoTube</h1>
+          <p>Please wait while we check service availability.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (backendStatus === 'offline') {
+    return (
+      <div className="backend-status-screen">
+        <div className="backend-status-card">
+          <span className="backend-status-dot offline" />
+          <h1>Service temporarily unavailable</h1>
+          <p>VideoTube cannot connect to the server right now. Please try again in a moment.</p>
+          <button type="button" onClick={checkBackendStatus}>
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <Router>
