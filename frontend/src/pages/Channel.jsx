@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  FaCog,
   FaEdit,
   FaEllipsisV,
   FaGlobe,
   FaImage,
   FaListUl,
   FaLock,
-  FaPlay,
   FaSearch,
   FaTimes,
   FaTrash,
@@ -85,6 +83,20 @@ export default function Channel({ initialTab = 'home' }) {
   const [updatingVisibility, setUpdatingVisibility] = useState(false)
   const [profileImageError, setProfileImageError] = useState('')
   const [updatingProfileImage, setUpdatingProfileImage] = useState('')
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [isNameModalOpen, setIsNameModalOpen] = useState(false)
+  const [nameValue, setNameValue] = useState('')
+  const [nameError, setNameError] = useState('')
+  const [nameSuccess, setNameSuccess] = useState('')
+  const [changingName, setChangingName] = useState(false)
 
   const isOwnChannel = !channelId || channelId === user?._id
 
@@ -230,6 +242,155 @@ export default function Channel({ initialTab = 'home' }) {
       setProfileImageError(uploadError.response?.data?.message || `Unable to update ${imageType}.`)
     } finally {
       setUpdatingProfileImage('')
+    }
+  }
+
+  const openPasswordModal = () => {
+    setPasswordForm({
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setPasswordError('')
+    setPasswordSuccess('')
+    setIsPasswordModalOpen(true)
+  }
+
+  const closePasswordModal = () => {
+    if (changingPassword) return
+
+    setIsPasswordModalOpen(false)
+    setPasswordForm({
+      oldPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    })
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  const handlePasswordFieldChange = (event) => {
+    const { name, value } = event.target
+    setPasswordForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }))
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  const changePassword = async (event) => {
+    event.preventDefault()
+
+    if (changingPassword) return
+
+    const oldPassword = passwordForm.oldPassword.trim()
+    const newPassword = passwordForm.newPassword.trim()
+    const confirmPassword = passwordForm.confirmPassword.trim()
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required.')
+      return
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters.')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirm password do not match.')
+      return
+    }
+
+    if (oldPassword === newPassword) {
+      setPasswordError('New password must be different from old password.')
+      return
+    }
+
+    setChangingPassword(true)
+    setPasswordError('')
+    setPasswordSuccess('')
+
+    try {
+      await apiClient.post('/users/change-password', {
+        oldPassword,
+        newPassword,
+      })
+      setPasswordSuccess('Password changed successfully.')
+      setPasswordForm({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+    } catch (changeError) {
+      console.error('Unable to change password:', changeError)
+      setPasswordError(changeError.response?.data?.message || 'Unable to change password.')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
+
+  const openNameModal = () => {
+    setNameValue(channelUser?.fullName || '')
+    setNameError('')
+    setNameSuccess('')
+    setIsNameModalOpen(true)
+  }
+
+  const closeNameModal = () => {
+    if (changingName) return
+
+    setIsNameModalOpen(false)
+    setNameValue('')
+    setNameError('')
+    setNameSuccess('')
+  }
+
+  const changeName = async (event) => {
+    event.preventDefault()
+
+    if (changingName) return
+
+    const fullName = nameValue.trim()
+
+    if (!fullName) {
+      setNameError('Name is required.')
+      return
+    }
+
+    if (fullName.length > 80) {
+      setNameError('Name should not exceed 80 characters.')
+      return
+    }
+
+    if (fullName === channelUser?.fullName) {
+      setNameError('Enter a different name before saving.')
+      return
+    }
+
+    setChangingName(true)
+    setNameError('')
+    setNameSuccess('')
+
+    try {
+      const response = await apiClient.patch('/users/update-account', { fullName })
+      const updatedUser = response.data.data
+      const nextUser = {
+        ...user,
+        ...channelUser,
+        ...updatedUser,
+      }
+
+      setChannelUser(nextUser)
+      setAuthUser(nextUser)
+      localStorage.setItem('user', JSON.stringify(nextUser))
+      setNameSuccess('Name changed successfully.')
+    } catch (changeError) {
+      console.error('Unable to change name:', changeError)
+      setNameError(changeError.response?.data?.message || 'Unable to change name.')
+    } finally {
+      setChangingName(false)
     }
   }
 
@@ -825,13 +986,13 @@ export default function Channel({ initialTab = 'home' }) {
               {profileImageError && <p className="channel-profile-error">{profileImageError}</p>}
               {isOwnChannel && (
                 <div className="channel-actions">
-                  <button type="button">
-                    <FaCog />
-                    <span>Customize channel</span>
+                  <button type="button" onClick={openPasswordModal}>
+                    <FaLock />
+                    <span>Change password</span>
                   </button>
-                  <button type="button" onClick={() => navigate('/upload')}>
-                    <FaPlay />
-                    <span>Manage videos</span>
+                  <button type="button" onClick={openNameModal}>
+                    <FaEdit />
+                    <span>Change name</span>
                   </button>
                 </div>
               )}
@@ -947,6 +1108,140 @@ export default function Channel({ initialTab = 'home' }) {
               </button>
               <button type="submit" disabled={updatingVideo}>
                 {updatingVideo ? 'Saving' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isPasswordModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closePasswordModal}
+        >
+          <form
+            className="channel-video-update-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-password-title"
+            onSubmit={changePassword}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-password-title">Change password</h2>
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                aria-label="Close change password dialog"
+                disabled={changingPassword}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {passwordError && <div className="channel-video-update-error">{passwordError}</div>}
+            {passwordSuccess && <div className="channel-password-success">{passwordSuccess}</div>}
+
+            <div className="channel-password-fields">
+              <label className="channel-video-update-field">
+                <span>Old password</span>
+                <input
+                  type="password"
+                  name="oldPassword"
+                  value={passwordForm.oldPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="current-password"
+                  autoFocus
+                />
+              </label>
+
+              <label className="channel-video-update-field">
+                <span>New password</span>
+                <input
+                  type="password"
+                  name="newPassword"
+                  value={passwordForm.newPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="new-password"
+                />
+              </label>
+
+              <label className="channel-video-update-field">
+                <span>Confirm password</span>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={passwordForm.confirmPassword}
+                  onChange={handlePasswordFieldChange}
+                  autoComplete="new-password"
+                />
+              </label>
+            </div>
+
+            <div className="channel-video-update-actions">
+              <button type="button" onClick={closePasswordModal} disabled={changingPassword}>
+                Cancel
+              </button>
+              <button type="submit" disabled={changingPassword}>
+                {changingPassword ? 'Changing' : 'Change password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isNameModalOpen && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closeNameModal}
+        >
+          <form
+            className="channel-video-update-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-name-title"
+            onSubmit={changeName}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-name-title">Change name</h2>
+              <button
+                type="button"
+                onClick={closeNameModal}
+                aria-label="Close change name dialog"
+                disabled={changingName}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {nameError && <div className="channel-video-update-error">{nameError}</div>}
+            {nameSuccess && <div className="channel-password-success">{nameSuccess}</div>}
+
+            <label className="channel-video-update-field">
+              <span>Name</span>
+              <input
+                type="text"
+                value={nameValue}
+                onChange={(event) => {
+                  setNameValue(event.target.value)
+                  setNameError('')
+                  setNameSuccess('')
+                }}
+                maxLength={80}
+                autoComplete="name"
+                autoFocus
+              />
+            </label>
+
+            <div className="channel-video-update-actions">
+              <button type="button" onClick={closeNameModal} disabled={changingName}>
+                Cancel
+              </button>
+              <button type="submit" disabled={changingName}>
+                {changingName ? 'Saving' : 'Save name'}
               </button>
             </div>
           </form>

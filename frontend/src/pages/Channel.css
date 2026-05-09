@@ -689,6 +689,21 @@
   font-weight: 800;
 }
 
+.channel-password-success {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #116329;
+  background: #dcf7e5;
+  font-weight: 800;
+}
+
+.channel-password-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .channel-video-update-field {
   display: flex;
   flex-direction: column;
@@ -1122,6 +1137,11 @@
   .channel-video-update-error {
     color: #ffb4ab;
     background: #42201d;
+  }
+
+  .channel-password-success {
+    color: #b7f7ce;
+    background: #173f27;
   }
 
   .channel-tweet-actions button,
