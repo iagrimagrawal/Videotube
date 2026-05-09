@@ -1,8 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FaCog, FaEdit, FaEllipsisV, FaImage, FaListUl, FaPlay, FaSearch, FaTimes, FaTrash } from 'react-icons/fa'
+import {
+  FaCog,
+  FaEdit,
+  FaEllipsisV,
+  FaGlobe,
+  FaImage,
+  FaListUl,
+  FaLock,
+  FaPlay,
+  FaSearch,
+  FaTimes,
+  FaTrash,
+} from 'react-icons/fa'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../hooks/useAuth'
+import { useAuthStore } from '../store/authStore'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
 import './Channel.css'
@@ -38,6 +51,9 @@ export default function Channel({ initialTab = 'home' }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
   const { user } = useAuth()
+  const setAuthUser = useAuthStore((state) => state.setUser)
+  const coverInputRef = useRef(null)
+  const avatarInputRef = useRef(null)
 
   const ownerId = channelId || user?._id
   const [activeTab, setActiveTab] = useState(initialTab)
@@ -64,6 +80,11 @@ export default function Channel({ initialTab = 'home' }) {
   const [updatingVideo, setUpdatingVideo] = useState(false)
   const [videoToDelete, setVideoToDelete] = useState(null)
   const [deletingVideo, setDeletingVideo] = useState(false)
+  const [videoVisibilityTarget, setVideoVisibilityTarget] = useState(null)
+  const [videoVisibilityNotice, setVideoVisibilityNotice] = useState(null)
+  const [updatingVisibility, setUpdatingVisibility] = useState(false)
+  const [profileImageError, setProfileImageError] = useState('')
+  const [updatingProfileImage, setUpdatingProfileImage] = useState('')
 
   const isOwnChannel = !channelId || channelId === user?._id
 
@@ -171,6 +192,47 @@ export default function Channel({ initialTab = 'home' }) {
 
   const featuredVideos = useMemo(() => popularVideos.slice(0, 8), [popularVideos])
 
+  const updateProfileImage = async (event, imageType) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+
+    if (!file || updatingProfileImage) return
+
+    if (!file.type.startsWith('image/')) {
+      setProfileImageError('Choose a valid image file.')
+      return
+    }
+
+    const fieldName = imageType === 'avatar' ? 'avatar' : 'coverImage'
+    const endpoint = imageType === 'avatar' ? '/users/update-avatar' : '/users/update-cover-image'
+    const formData = new FormData()
+    formData.append(fieldName, file)
+
+    setUpdatingProfileImage(imageType)
+    setProfileImageError('')
+
+    try {
+      const response = await apiClient.patch(endpoint, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      const updatedUser = response.data.data
+      const nextUser = {
+        ...user,
+        ...channelUser,
+        ...updatedUser,
+      }
+
+      setChannelUser(nextUser)
+      setAuthUser(nextUser)
+      localStorage.setItem('user', JSON.stringify(nextUser))
+    } catch (uploadError) {
+      console.error(`Unable to update ${imageType}:`, uploadError)
+      setProfileImageError(uploadError.response?.data?.message || `Unable to update ${imageType}.`)
+    } finally {
+      setUpdatingProfileImage('')
+    }
+  }
+
   const openVideoUpdateDialog = (video, mode) => {
     setOpenVideoMenuId('')
     setVideoToUpdate(video)
@@ -240,6 +302,18 @@ export default function Channel({ initialTab = 'home' }) {
     setVideoToDelete(video)
   }
 
+  const openVisibilityConfirm = (video, nextIsPublished) => {
+    setOpenVideoMenuId('')
+    setVideoActionError('')
+
+    if (Boolean(video.isPublished) === nextIsPublished) {
+      setVideoVisibilityNotice(nextIsPublished ? 'This video is already public.' : 'This video is already private.')
+      return
+    }
+
+    setVideoVisibilityTarget({ video, nextIsPublished })
+  }
+
   const updateVideo = async (event) => {
     event.preventDefault()
     if (!videoToUpdate || updatingVideo) return
@@ -304,6 +378,32 @@ export default function Channel({ initialTab = 'home' }) {
       setDeletingVideo(false)
     }
   }
+
+  const confirmVisibilityChange = async () => {
+    if (!videoVisibilityTarget || updatingVisibility) return
+
+    const { video, nextIsPublished } = videoVisibilityTarget
+
+    if (Boolean(video.isPublished) === nextIsPublished) {
+      setVideoVisibilityTarget(null)
+      return
+    }
+
+    setUpdatingVisibility(true)
+    setVideoActionError('')
+
+    try {
+      const response = await apiClient.patch(`/videos/toggle/publish/${video._id}`)
+      mergeUpdatedVideo(response.data.data)
+      setVideoVisibilityTarget(null)
+    } catch (visibilityError) {
+      console.error('Unable to update video visibility:', visibilityError)
+      setVideoActionError(visibilityError.response?.data?.message || 'Unable to update video visibility.')
+    } finally {
+      setUpdatingVisibility(false)
+    }
+  }
+
 
   const startEditingTweet = (tweet) => {
     setTweetActionError('')
@@ -409,6 +509,11 @@ export default function Channel({ initialTab = 'home' }) {
                 <span>
                   {formatCount(video.views)} views - {formatTimeAgo(video.createdAt || video.uploadedAt)}
                 </span>
+                {isOwnChannel && (
+                  <em className={`channel-video-visibility ${video.isPublished ? 'public' : 'private'}`}>
+                    {video.isPublished ? 'Public' : 'Private'}
+                  </em>
+                )}
               </button>
 
               {isOwnChannel && (
@@ -437,6 +542,23 @@ export default function Channel({ initialTab = 'home' }) {
                       <button type="button" onClick={() => openVideoUpdateDialog(video, 'thumbnail')}>
                         <FaImage />
                         <span>Update thumbnail</span>
+                      </button>
+                      <span>Visibility</span>
+                      <button
+                        type="button"
+                        className={video.isPublished ? 'active' : ''}
+                        onClick={() => openVisibilityConfirm(video, true)}
+                      >
+                        <FaGlobe />
+                        <span>Public</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={!video.isPublished ? 'active' : ''}
+                        onClick={() => openVisibilityConfirm(video, false)}
+                      >
+                        <FaLock />
+                        <span>Private</span>
                       </button>
                       <button type="button" className="danger" onClick={() => openDeleteVideoConfirm(video)}>
                         <FaTrash />
@@ -629,42 +751,91 @@ export default function Channel({ initialTab = 'home' }) {
 
       <main className="channel-main">
         <section className="channel-hero">
-          <div className="channel-avatar-wrap">
-            {channelUser?.avatar ? (
-              <img src={channelUser.avatar} alt={channelUser.fullName || channelUser.username} />
-            ) : (
-              <span>{channelUser?.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+          <div className={`channel-cover ${channelUser?.coverImage ? 'has-cover' : ''}`}>
+            {channelUser?.coverImage && (
+              <img src={channelUser.coverImage} alt="" />
+            )}
+            {isOwnChannel && (
+              <>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="channel-image-input"
+                  onChange={(event) => updateProfileImage(event, 'cover')}
+                />
+                <button
+                  type="button"
+                  className="channel-image-edit channel-cover-edit"
+                  aria-label="Update cover image"
+                  title="Update cover image"
+                  disabled={Boolean(updatingProfileImage)}
+                  onClick={() => coverInputRef.current?.click()}
+                >
+                  <FaEdit />
+                </button>
+              </>
             )}
           </div>
 
-          <div className="channel-hero-copy">
-            <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
-            <p>
-              <strong>@{channelUser?.username || 'user'}</strong>
-              <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
-              <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
-              {isOwnChannel && channelStats && (
+          <div className="channel-hero-details">
+            <div className="channel-avatar-wrap">
+              {channelUser?.avatar ? (
+                <img src={channelUser.avatar} alt={channelUser.fullName || channelUser.username} />
+              ) : (
+                <span>{channelUser?.fullName?.charAt(0).toUpperCase() || 'U'}</span>
+              )}
+              {isOwnChannel && (
                 <>
-                  <span>- {formatCount(channelStats.totalViews)} views</span>
-                  <span>- {formatCount(channelStats.totalLikes)} likes</span>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="channel-image-input"
+                    onChange={(event) => updateProfileImage(event, 'avatar')}
+                  />
+                  <button
+                    type="button"
+                    className="channel-image-edit channel-avatar-edit"
+                    aria-label="Update avatar"
+                    title="Update avatar"
+                    disabled={Boolean(updatingProfileImage)}
+                    onClick={() => avatarInputRef.current?.click()}
+                  >
+                    <FaEdit />
+                  </button>
                 </>
               )}
-            </p>
-            <p className="channel-about">
-              {channelUser?.coverImage ? 'More about this channel' : 'More about this channel ...more'}
-            </p>
-            {isOwnChannel && (
-              <div className="channel-actions">
-                <button type="button">
-                  <FaCog />
-                  <span>Customize channel</span>
-                </button>
-                <button type="button" onClick={() => navigate('/upload')}>
-                  <FaPlay />
-                  <span>Manage videos</span>
-                </button>
-              </div>
-            )}
+            </div>
+
+            <div className="channel-hero-copy">
+              <h1>{channelUser?.fullName || channelUser?.username || 'Your Channel'}</h1>
+              <p>
+                <strong>@{channelUser?.username || 'user'}</strong>
+                <span>- {formatCount(channelUser?.subscriberCount)} subscribers</span>
+                <span>- {formatCount(channelStats?.totalVideos ?? allVideos.length)} videos</span>
+                {isOwnChannel && channelStats && (
+                  <>
+                    <span>- {formatCount(channelStats.totalViews)} views</span>
+                    <span>- {formatCount(channelStats.totalLikes)} likes</span>
+                  </>
+                )}
+              </p>
+              <p className="channel-about">More about this channel</p>
+              {profileImageError && <p className="channel-profile-error">{profileImageError}</p>}
+              {isOwnChannel && (
+                <div className="channel-actions">
+                  <button type="button">
+                    <FaCog />
+                    <span>Customize channel</span>
+                  </button>
+                  <button type="button" onClick={() => navigate('/upload')}>
+                    <FaPlay />
+                    <span>Manage videos</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
@@ -822,6 +993,84 @@ export default function Channel({ initialTab = 'home' }) {
                 disabled={deletingVideo}
               >
                 {deletingVideo ? 'Deleting' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {videoVisibilityTarget && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => {
+            if (!updatingVisibility) {
+              setVideoVisibilityTarget(null)
+              setVideoActionError('')
+            }
+          }}
+        >
+          <div
+            className="channel-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>
+              Make video {videoVisibilityTarget.nextIsPublished ? 'public' : 'private'}?
+            </h2>
+            <p>
+              {videoVisibilityTarget.nextIsPublished
+                ? 'This video will be visible on your channel, in Home, and anywhere public videos are listed.'
+                : 'Only you will be able to see this video on your channel or open it directly.'}
+            </p>
+            {videoActionError && <div className="channel-video-update-error">{videoActionError}</div>}
+            <div className="channel-confirm-actions">
+              <button
+                type="button"
+                className="channel-confirm-cancel"
+                onClick={() => {
+                  setVideoVisibilityTarget(null)
+                  setVideoActionError('')
+                }}
+                disabled={updatingVisibility}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="channel-confirm-save"
+                onClick={confirmVisibilityChange}
+                disabled={updatingVisibility}
+              >
+                {updatingVisibility ? 'Updating' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {videoVisibilityNotice && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => setVideoVisibilityNotice(null)}
+        >
+          <div
+            className="channel-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>{videoVisibilityNotice}</h2>
+            <p>Choose a different visibility option to change who can see this video.</p>
+            <div className="channel-confirm-actions">
+              <button
+                type="button"
+                className="channel-confirm-save"
+                onClick={() => setVideoVisibilityNotice(null)}
+              >
+                OK
               </button>
             </div>
           </div>
