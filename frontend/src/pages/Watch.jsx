@@ -747,34 +747,47 @@ export default function Watch() {
     fetchSavePlaylists()
   }
 
-  const saveToPlaylist = async (playlistId) => {
+  const togglePlaylistSave = async (playlistId) => {
     if (!canUseLiveStats || savingPlaylistId) {
       setSaveError('Only uploaded videos can be saved to playlists.')
       return
     }
 
+    const targetPlaylist = savePlaylists.find((playlistItem) => playlistItem._id === playlistId)
+    const shouldRemove = Boolean(targetPlaylist?.hasCurrentVideo)
+
     setSavingPlaylistId(playlistId)
     setSaveError('')
 
     try {
-      await apiClient.patch(`/playlist/add/${video._id}/${playlistId}`)
+      await apiClient.patch(
+        shouldRemove
+          ? `/playlist/remove/${video._id}/${playlistId}`
+          : `/playlist/add/${video._id}/${playlistId}`
+      )
       setSavePlaylists((currentPlaylists) =>
         currentPlaylists.map((playlistItem) =>
           playlistItem._id === playlistId
             ? {
                 ...playlistItem,
-                hasCurrentVideo: true,
-                videos: [...(playlistItem.videos || []), video._id],
-                videoCount: playlistItem.hasCurrentVideo
-                  ? playlistItem.videoCount
+                hasCurrentVideo: !shouldRemove,
+                videos: shouldRemove
+                  ? (playlistItem.videos || []).filter((playlistVideo) => {
+                      const playlistVideoId =
+                        typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
+                      return playlistVideoId !== video._id
+                    })
+                  : [...(playlistItem.videos || []), video._id],
+                videoCount: shouldRemove
+                  ? Math.max(0, (playlistItem.videoCount || 0) - 1)
                   : (playlistItem.videoCount || 0) + 1,
               }
             : playlistItem
         )
       )
     } catch (error) {
-      console.error('Unable to save video to playlist:', error)
-      setSaveError(error.response?.data?.message || 'Unable to save video.')
+      console.error('Unable to update playlist save:', error)
+      setSaveError(error.response?.data?.message || 'Unable to update playlist.')
     } finally {
       setSavingPlaylistId('')
     }
@@ -1219,8 +1232,9 @@ export default function Watch() {
                     key={playlistItem._id}
                     type="button"
                     className={`save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
-                    onClick={() => saveToPlaylist(playlistItem._id)}
-                    disabled={savingPlaylistId === playlistItem._id || playlistItem.hasCurrentVideo}
+                    onClick={() => togglePlaylistSave(playlistItem._id)}
+                    disabled={savingPlaylistId === playlistItem._id}
+                    aria-pressed={playlistItem.hasCurrentVideo}
                   >
                     <span className="save-playlist-thumb">
                       {playlistItem.previewVideo?.thumbnail ? (
@@ -1231,7 +1245,7 @@ export default function Watch() {
                     </span>
                     <span className="save-playlist-copy">
                       <strong>{playlistItem.name}</strong>
-                      <span>Private</span>
+                      <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Playlist'}</span>
                     </span>
                     <span className="save-bookmark-icon">
                       <FaBookmark />

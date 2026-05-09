@@ -237,33 +237,44 @@ export default function History() {
     setNewPlaylistDescription('')
   }
 
-  const saveToPlaylist = async (playlistId) => {
+  const togglePlaylistSave = async (playlistId) => {
     if (!saveVideo?._id || savingPlaylistId) return
+
+    const targetPlaylist = savePlaylists.find((playlistItem) => playlistItem._id === playlistId)
+    const shouldRemove = Boolean(targetPlaylist?.hasCurrentVideo)
 
     setSavingPlaylistId(playlistId)
     setSaveError('')
 
     try {
-      await apiClient.patch(`/playlist/add/${saveVideo._id}/${playlistId}`)
+      await apiClient.patch(
+        shouldRemove
+          ? `/playlist/remove/${saveVideo._id}/${playlistId}`
+          : `/playlist/add/${saveVideo._id}/${playlistId}`
+      )
       setSavePlaylists((currentPlaylists) =>
         currentPlaylists.map((playlistItem) =>
           playlistItem._id === playlistId
             ? {
                 ...playlistItem,
-                hasCurrentVideo: true,
-                videos: playlistItem.hasCurrentVideo
-                  ? playlistItem.videos || []
+                hasCurrentVideo: !shouldRemove,
+                videos: shouldRemove
+                  ? (playlistItem.videos || []).filter((playlistVideo) => {
+                      const playlistVideoId =
+                        typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
+                      return playlistVideoId !== saveVideo._id
+                    })
                   : [...(playlistItem.videos || []), saveVideo._id],
-                videoCount: playlistItem.hasCurrentVideo
-                  ? playlistItem.videoCount
+                videoCount: shouldRemove
+                  ? Math.max(0, (playlistItem.videoCount || 0) - 1)
                   : (playlistItem.videoCount || 0) + 1,
               }
             : playlistItem
         )
       )
     } catch (savePlaylistError) {
-      console.error('Unable to save video to playlist:', savePlaylistError)
-      setSaveError(savePlaylistError.response?.data?.message || 'Unable to save video.')
+      console.error('Unable to update playlist save:', savePlaylistError)
+      setSaveError(savePlaylistError.response?.data?.message || 'Unable to update playlist.')
     } finally {
       setSavingPlaylistId('')
     }
@@ -567,8 +578,9 @@ export default function History() {
                     key={playlistItem._id}
                     type="button"
                     className={`history-save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
-                    onClick={() => saveToPlaylist(playlistItem._id)}
-                    disabled={savingPlaylistId === playlistItem._id || playlistItem.hasCurrentVideo}
+                    onClick={() => togglePlaylistSave(playlistItem._id)}
+                    disabled={savingPlaylistId === playlistItem._id}
+                    aria-pressed={playlistItem.hasCurrentVideo}
                   >
                     <span className="history-save-playlist-thumb">
                       {playlistItem.previewVideo?.thumbnail ? (
@@ -579,7 +591,7 @@ export default function History() {
                     </span>
                     <span className="history-save-playlist-copy">
                       <strong>{playlistItem.name}</strong>
-                      <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Private'}</span>
+                      <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Playlist'}</span>
                     </span>
                     <span className="history-save-bookmark-icon">
                       <FaBookmark />

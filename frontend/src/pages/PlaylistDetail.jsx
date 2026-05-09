@@ -314,7 +314,7 @@ export default function PlaylistDetail() {
                 </div>
 
                 <p className="playlist-detail-meta">
-                  Playlist - Private - {videos.length || playlist?.videoCount || 0}{' '}
+                  Playlist - {videos.length || playlist?.videoCount || 0}{' '}
                   {(videos.length || playlist?.videoCount) === 1 ? 'video' : 'videos'} - {formatCount(totalViews)} views
                 </p>
 

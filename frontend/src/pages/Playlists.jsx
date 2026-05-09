@@ -193,7 +193,7 @@ export default function Playlists() {
                     <button type="button" className="playlist-more" aria-label="Playlist actions">
                       <FaEllipsisV />
                     </button>
-                    <p>Private - Playlist</p>
+                    <p>Playlist</p>
                     <span>
                       {playlist.updatedAt ? `Updated ${formatTimeAgo(playlist.updatedAt)}` : 'View full playlist'}
                     </span>
