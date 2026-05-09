@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FaCog, FaEdit, FaListUl, FaPlay, FaSearch, FaTrash } from 'react-icons/fa'
+import { FaCog, FaEdit, FaEllipsisV, FaImage, FaListUl, FaPlay, FaSearch, FaTimes, FaTrash } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../hooks/useAuth'
 import apiClient from '../lib/api'
@@ -54,12 +54,38 @@ export default function Channel({ initialTab = 'home' }) {
   const [tweetActionError, setTweetActionError] = useState('')
   const [tweetActionId, setTweetActionId] = useState(null)
   const [tweetToDelete, setTweetToDelete] = useState(null)
+  const [openVideoMenuId, setOpenVideoMenuId] = useState('')
+  const [videoToUpdate, setVideoToUpdate] = useState(null)
+  const [videoUpdateMode, setVideoUpdateMode] = useState('')
+  const [videoUpdateValue, setVideoUpdateValue] = useState('')
+  const [videoThumbnailFile, setVideoThumbnailFile] = useState(null)
+  const [videoThumbnailPreview, setVideoThumbnailPreview] = useState('')
+  const [videoActionError, setVideoActionError] = useState('')
+  const [updatingVideo, setUpdatingVideo] = useState(false)
+  const [videoToDelete, setVideoToDelete] = useState(null)
+  const [deletingVideo, setDeletingVideo] = useState(false)
 
   const isOwnChannel = !channelId || channelId === user?._id
 
   useEffect(() => {
     setActiveTab(initialTab)
   }, [initialTab])
+
+  useEffect(() => {
+    if (!openVideoMenuId) return undefined
+
+    const closeMenu = () => setOpenVideoMenuId('')
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [openVideoMenuId])
+
+  useEffect(() => {
+    return () => {
+      if (videoThumbnailPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(videoThumbnailPreview)
+      }
+    }
+  }, [videoThumbnailPreview])
 
   useEffect(() => {
     if (!ownerId) return undefined
@@ -145,6 +171,140 @@ export default function Channel({ initialTab = 'home' }) {
 
   const featuredVideos = useMemo(() => popularVideos.slice(0, 8), [popularVideos])
 
+  const openVideoUpdateDialog = (video, mode) => {
+    setOpenVideoMenuId('')
+    setVideoToUpdate(video)
+    setVideoUpdateMode(mode)
+    setVideoActionError('')
+    setVideoThumbnailFile(null)
+    setVideoThumbnailPreview('')
+    setVideoUpdateValue(mode === 'title' ? video.title || '' : mode === 'description' ? video.description || '' : '')
+  }
+
+  const closeVideoUpdateDialog = () => {
+    if (updatingVideo) return
+
+    if (videoThumbnailPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(videoThumbnailPreview)
+    }
+    setVideoToUpdate(null)
+    setVideoUpdateMode('')
+    setVideoUpdateValue('')
+    setVideoThumbnailFile(null)
+    setVideoThumbnailPreview('')
+    setVideoActionError('')
+  }
+
+  const handleVideoThumbnailChange = (event) => {
+    const file = event.target.files?.[0]
+
+    if (videoThumbnailPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(videoThumbnailPreview)
+    }
+
+    if (!file) {
+      setVideoThumbnailFile(null)
+      setVideoThumbnailPreview('')
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setVideoThumbnailFile(null)
+      setVideoThumbnailPreview('')
+      setVideoActionError('Choose a valid image for the thumbnail.')
+      return
+    }
+
+    setVideoActionError('')
+    setVideoThumbnailFile(file)
+    setVideoThumbnailPreview(URL.createObjectURL(file))
+  }
+
+  const mergeUpdatedVideo = (updatedVideo) => {
+    const mergeVideo = (video) =>
+      video._id === updatedVideo._id
+        ? {
+            ...video,
+            ...updatedVideo,
+            owner: updatedVideo.owner || video.owner,
+          }
+        : video
+
+    setAllVideos((currentVideos) => currentVideos.map(mergeVideo))
+    setPopularVideos((currentVideos) => currentVideos.map(mergeVideo))
+  }
+
+  const openDeleteVideoConfirm = (video) => {
+    setOpenVideoMenuId('')
+    setVideoActionError('')
+    setVideoToDelete(video)
+  }
+
+  const updateVideo = async (event) => {
+    event.preventDefault()
+    if (!videoToUpdate || updatingVideo) return
+
+    const formData = new FormData()
+
+    if (videoUpdateMode === 'thumbnail') {
+      if (!videoThumbnailFile) {
+        setVideoActionError('Choose a thumbnail image before saving.')
+        return
+      }
+      formData.append('thumbnail', videoThumbnailFile)
+    } else {
+      const nextValue = videoUpdateValue.trim()
+      if (!nextValue) {
+        setVideoActionError(`Video ${videoUpdateMode} cannot be empty.`)
+        return
+      }
+      formData.append(videoUpdateMode, nextValue)
+    }
+
+    setUpdatingVideo(true)
+    setVideoActionError('')
+
+    try {
+      const response = await apiClient.patch(`/videos/${videoToUpdate._id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      mergeUpdatedVideo(response.data.data)
+      closeVideoUpdateDialog()
+    } catch (updateError) {
+      console.error('Unable to update video:', updateError)
+      setVideoActionError(updateError.response?.data?.message || 'Unable to update video.')
+    } finally {
+      setUpdatingVideo(false)
+    }
+  }
+
+  const confirmDeleteVideo = async () => {
+    if (!videoToDelete || deletingVideo) return
+
+    setDeletingVideo(true)
+    setVideoActionError('')
+
+    try {
+      await apiClient.delete(`/videos/${videoToDelete._id}`)
+      setAllVideos((currentVideos) => currentVideos.filter((video) => video._id !== videoToDelete._id))
+      setPopularVideos((currentVideos) => currentVideos.filter((video) => video._id !== videoToDelete._id))
+      setChannelStats((currentStats) =>
+        currentStats
+          ? {
+              ...currentStats,
+              totalVideos: Math.max(0, (currentStats.totalVideos || 0) - 1),
+            }
+          : currentStats
+      )
+      setVideoToDelete(null)
+    } catch (deleteError) {
+      console.error('Unable to delete video:', deleteError)
+      setVideoActionError(deleteError.response?.data?.message || 'Unable to delete video.')
+    } finally {
+      setDeletingVideo(false)
+    }
+  }
+
   const startEditingTweet = (tweet) => {
     setTweetActionError('')
     setEditingTweetId(tweet._id)
@@ -226,20 +386,68 @@ export default function Channel({ initialTab = 'home' }) {
     return (
       <div className="channel-video-grid">
         {videos.map((video) => (
-          <button
-            key={video._id}
-            className="channel-video-card"
-            onClick={() => navigate(`/watch/${video._id}`)}
-          >
-            <span className="channel-video-thumb">
-              <img src={video.thumbnail} alt="" />
-              <span>{formatDuration(video.duration)}</span>
-            </span>
-            <strong>{video.title}</strong>
-            <span>
-              {formatCount(video.views)} views - {formatTimeAgo(video.createdAt || video.uploadedAt)}
-            </span>
-          </button>
+          <article key={video._id} className="channel-video-card-wrap">
+            <button
+              type="button"
+              className="channel-video-thumb-button"
+              onClick={() => navigate(`/watch/${video._id}`)}
+              aria-label={`Watch ${video.title}`}
+            >
+              <span className="channel-video-thumb">
+                <img src={video.thumbnail} alt="" />
+                <span>{formatDuration(video.duration)}</span>
+              </span>
+            </button>
+
+            <div className="channel-video-meta">
+              <button
+                type="button"
+                className="channel-video-card"
+                onClick={() => navigate(`/watch/${video._id}`)}
+              >
+                <strong>{video.title}</strong>
+                <span>
+                  {formatCount(video.views)} views - {formatTimeAgo(video.createdAt || video.uploadedAt)}
+                </span>
+              </button>
+
+              {isOwnChannel && (
+                <div className="channel-video-actions" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="channel-video-more"
+                    aria-label="Video actions"
+                    aria-expanded={openVideoMenuId === video._id}
+                    onClick={() => setOpenVideoMenuId((currentId) => (currentId === video._id ? '' : video._id))}
+                  >
+                    <FaEllipsisV />
+                  </button>
+
+                  {openVideoMenuId === video._id && (
+                    <div className="channel-video-menu">
+                      <span>Update</span>
+                      <button type="button" onClick={() => openVideoUpdateDialog(video, 'title')}>
+                        <FaEdit />
+                        <span>Update title</span>
+                      </button>
+                      <button type="button" onClick={() => openVideoUpdateDialog(video, 'description')}>
+                        <FaEdit />
+                        <span>Update description</span>
+                      </button>
+                      <button type="button" onClick={() => openVideoUpdateDialog(video, 'thumbnail')}>
+                        <FaImage />
+                        <span>Update thumbnail</span>
+                      </button>
+                      <button type="button" className="danger" onClick={() => openDeleteVideoConfirm(video)}>
+                        <FaTrash />
+                        <span>Delete video</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </article>
         ))}
       </div>
     )
@@ -303,13 +511,24 @@ export default function Channel({ initialTab = 'home' }) {
           ) : (
             <div className="channel-playlist-grid">
               {playlists.map((playlist) => (
-                <article key={playlist._id} className="channel-playlist-card">
+                <article
+                  key={playlist._id}
+                  className="channel-playlist-card"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/playlists/${playlist._id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      navigate(`/playlists/${playlist._id}`)
+                    }
+                  }}
+                >
                   <div className="channel-playlist-art">
                     <FaListUl />
                     <span>{playlist.videos?.length || playlist.videoCount || 0} videos</span>
                   </div>
                   <strong>{playlist.name}</strong>
-                  <p>{playlist.description}</p>
                 </article>
               ))}
             </div>
@@ -469,6 +688,145 @@ export default function Channel({ initialTab = 'home' }) {
 
         {renderTabContent()}
       </main>
+
+      {videoToUpdate && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={closeVideoUpdateDialog}
+        >
+          <form
+            className="channel-video-update-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="channel-video-update-title"
+            onSubmit={updateVideo}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="channel-video-update-header">
+              <h2 id="channel-video-update-title">
+                {videoUpdateMode === 'title' && 'Update title'}
+                {videoUpdateMode === 'description' && 'Update description'}
+                {videoUpdateMode === 'thumbnail' && 'Update thumbnail'}
+              </h2>
+              <button
+                type="button"
+                onClick={closeVideoUpdateDialog}
+                aria-label="Close update dialog"
+                disabled={updatingVideo}
+              >
+                <FaTimes />
+              </button>
+            </div>
+
+            {videoActionError && <div className="channel-video-update-error">{videoActionError}</div>}
+
+            {videoUpdateMode === 'title' && (
+              <label className="channel-video-update-field">
+                <span>Title</span>
+                <input
+                  type="text"
+                  value={videoUpdateValue}
+                  onChange={(event) => {
+                    setVideoUpdateValue(event.target.value)
+                    setVideoActionError('')
+                  }}
+                  maxLength={100}
+                  autoFocus
+                />
+              </label>
+            )}
+
+            {videoUpdateMode === 'description' && (
+              <label className="channel-video-update-field">
+                <span>Description</span>
+                <textarea
+                  value={videoUpdateValue}
+                  onChange={(event) => {
+                    setVideoUpdateValue(event.target.value)
+                    setVideoActionError('')
+                  }}
+                  maxLength={500}
+                  rows={5}
+                  autoFocus
+                />
+              </label>
+            )}
+
+            {videoUpdateMode === 'thumbnail' && (
+              <div className="channel-video-update-field">
+                <span>Thumbnail</span>
+                <div className="channel-thumbnail-preview">
+                  {videoThumbnailPreview || videoToUpdate.thumbnail ? (
+                    <img src={videoThumbnailPreview || videoToUpdate.thumbnail} alt="" />
+                  ) : (
+                    <FaImage />
+                  )}
+                </div>
+                <label className="channel-thumbnail-picker">
+                  <input type="file" accept="image/*" onChange={handleVideoThumbnailChange} />
+                  <span>{videoThumbnailFile ? videoThumbnailFile.name : 'Choose thumbnail'}</span>
+                </label>
+              </div>
+            )}
+
+            <div className="channel-video-update-actions">
+              <button type="button" onClick={closeVideoUpdateDialog} disabled={updatingVideo}>
+                Cancel
+              </button>
+              <button type="submit" disabled={updatingVideo}>
+                {updatingVideo ? 'Saving' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {videoToDelete && (
+        <div
+          className="channel-modal-backdrop"
+          role="presentation"
+          onMouseDown={() => {
+            if (!deletingVideo) {
+              setVideoToDelete(null)
+              setVideoActionError('')
+            }
+          }}
+        >
+          <div
+            className="channel-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2>Delete video?</h2>
+            <p>This video will be permanently removed from your channel.</p>
+            <div className="channel-confirm-preview">{videoToDelete.title}</div>
+            {videoActionError && <div className="channel-video-update-error">{videoActionError}</div>}
+            <div className="channel-confirm-actions">
+              <button
+                type="button"
+                className="channel-confirm-cancel"
+                onClick={() => {
+                  setVideoToDelete(null)
+                  setVideoActionError('')
+                }}
+                disabled={deletingVideo}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="channel-confirm-delete"
+                onClick={confirmDeleteVideo}
+                disabled={deletingVideo}
+              >
+                {deletingVideo ? 'Deleting' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {tweetToDelete && (
         <div className="channel-modal-backdrop" role="presentation">

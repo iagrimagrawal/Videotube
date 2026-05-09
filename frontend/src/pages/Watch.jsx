@@ -7,6 +7,7 @@ import {
   FaChevronDown,
   FaClosedCaptioning,
   FaCompress,
+  FaEllipsisV,
   FaExpand,
   FaPause,
   FaPlay,
@@ -279,20 +280,24 @@ export default function Watch() {
   const [isTogglingLike, setIsTogglingLike] = useState(false)
   const [isTogglingSubscription, setIsTogglingSubscription] = useState(false)
   const [isShareOpen, setIsShareOpen] = useState(false)
+  const [shareTargetVideo, setShareTargetVideo] = useState(null)
   const [hasCopiedShareLink, setHasCopiedShareLink] = useState(false)
   const [isSaveOpen, setIsSaveOpen] = useState(false)
+  const [saveTargetVideo, setSaveTargetVideo] = useState(null)
   const [savePlaylists, setSavePlaylists] = useState([])
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [savingPlaylistId, setSavingPlaylistId] = useState('')
   const [showNewPlaylistForm, setShowNewPlaylistForm] = useState(false)
   const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [newPlaylistDescription, setNewPlaylistDescription] = useState('')
   const [creatingPlaylist, setCreatingPlaylist] = useState(false)
   const [playlistDetails, setPlaylistDetails] = useState(null)
   const [playlistVideos, setPlaylistVideos] = useState([])
   const [isLoadingPlaylist, setIsLoadingPlaylist] = useState(false)
   const [playlistError, setPlaylistError] = useState('')
   const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false)
+  const [openVideoMenuId, setOpenVideoMenuId] = useState('')
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const activeListId = searchParams.get('list')
@@ -306,10 +311,13 @@ export default function Watch() {
   const currentIndex = video ? playlist.findIndex((item) => item._id === video._id) : -1
   const progress = duration > 0 ? Math.min((playedSeconds / duration) * 100, 100) : 0
   const canUseLiveStats = isObjectId(video?._id)
+  const activeShareVideo = shareTargetVideo || video
+  const activeSaveVideo = saveTargetVideo || video
   const shareUrl = useMemo(() => {
-    if (typeof window === 'undefined') return `/watch/${video?._id || id}`
-    return `${window.location.origin}/watch/${video?._id || id}`
-  }, [id, video?._id])
+    const targetId = activeShareVideo?._id || id
+    if (typeof window === 'undefined') return `/watch/${targetId}`
+    return `${window.location.origin}/watch/${targetId}`
+  }, [activeShareVideo?._id, id])
 
   useEffect(() => {
     let isMounted = true
@@ -476,6 +484,7 @@ export default function Watch() {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         setIsShareOpen(false)
+        setShareTargetVideo(null)
       }
     }
 
@@ -489,12 +498,21 @@ export default function Watch() {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
         setIsSaveOpen(false)
+        setSaveTargetVideo(null)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [isSaveOpen])
+
+  useEffect(() => {
+    if (!openVideoMenuId) return undefined
+
+    const closeMenu = () => setOpenVideoMenuId('')
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [openVideoMenuId])
 
   const seekToSeconds = (seconds) => {
     const nextTime = Math.max(0, Math.min(seconds, duration || 0))
@@ -670,7 +688,9 @@ export default function Watch() {
     }
   }
 
-  const openShareDialog = () => {
+  const openShareDialog = (targetVideo = video) => {
+    setOpenVideoMenuId('')
+    setShareTargetVideo(targetVideo)
     setHasCopiedShareLink(false)
     setIsShareOpen(true)
   }
@@ -684,22 +704,22 @@ export default function Watch() {
     }
   }
 
-  const playlistHasVideo = (playlistItem) =>
+  const playlistHasVideo = (playlistItem, targetVideo = activeSaveVideo) =>
     (playlistItem.videos || []).some((playlistVideo) => {
       const playlistVideoId = typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
-      return playlistVideoId === video?._id
+      return playlistVideoId === targetVideo?._id
     })
 
-  const normalizeSavePlaylists = (items = []) =>
+  const normalizeSavePlaylists = (items = [], targetVideo = activeSaveVideo) =>
     items
       .filter((playlistItem) => playlistItem?._id)
       .map((playlistItem) => ({
         ...playlistItem,
         videoCount: playlistItem.videos?.length || playlistItem.videoCount || 0,
-        hasCurrentVideo: playlistHasVideo(playlistItem),
+        hasCurrentVideo: playlistHasVideo(playlistItem, targetVideo),
       }))
 
-  const fetchSavePlaylists = async () => {
+  const fetchSavePlaylists = async (targetVideo = activeSaveVideo) => {
     if (!user?._id) return
 
     setSaveLoading(true)
@@ -710,7 +730,7 @@ export default function Watch() {
         params: { limit: 50 },
       })
 
-      const basePlaylists = normalizeSavePlaylists(response.data.data || [])
+      const basePlaylists = normalizeSavePlaylists(response.data.data || [], targetVideo)
       const playlistsWithPreview = await Promise.all(
         basePlaylists.map(async (playlistItem) => {
           if (playlistItem.videoCount === 0) return playlistItem
@@ -738,42 +758,59 @@ export default function Watch() {
     }
   }
 
-  const openSaveDialog = () => {
+  const openSaveDialog = (targetVideo = video) => {
+    setOpenVideoMenuId('')
+    setSaveTargetVideo(targetVideo)
     setSaveError('')
     setShowNewPlaylistForm(false)
     setNewPlaylistName('')
     setIsSaveOpen(true)
-    fetchSavePlaylists()
+    fetchSavePlaylists(targetVideo)
   }
 
-  const saveToPlaylist = async (playlistId) => {
-    if (!canUseLiveStats || savingPlaylistId) {
+  const togglePlaylistSave = async (playlistId) => {
+    const canSaveTargetVideo = isObjectId(activeSaveVideo?._id)
+
+    if (!canSaveTargetVideo || savingPlaylistId) {
       setSaveError('Only uploaded videos can be saved to playlists.')
       return
     }
+
+    const targetPlaylist = savePlaylists.find((playlistItem) => playlistItem._id === playlistId)
+    const shouldRemove = Boolean(targetPlaylist?.hasCurrentVideo)
 
     setSavingPlaylistId(playlistId)
     setSaveError('')
 
     try {
-      await apiClient.patch(`/playlist/add/${video._id}/${playlistId}`)
+      await apiClient.patch(
+        shouldRemove
+          ? `/playlist/remove/${activeSaveVideo._id}/${playlistId}`
+          : `/playlist/add/${activeSaveVideo._id}/${playlistId}`
+      )
       setSavePlaylists((currentPlaylists) =>
         currentPlaylists.map((playlistItem) =>
           playlistItem._id === playlistId
             ? {
                 ...playlistItem,
-                hasCurrentVideo: true,
-                videos: [...(playlistItem.videos || []), video._id],
-                videoCount: playlistItem.hasCurrentVideo
-                  ? playlistItem.videoCount
+                hasCurrentVideo: !shouldRemove,
+                videos: shouldRemove
+                  ? (playlistItem.videos || []).filter((playlistVideo) => {
+                      const playlistVideoId =
+                        typeof playlistVideo === 'string' ? playlistVideo : playlistVideo?._id
+                      return playlistVideoId !== activeSaveVideo._id
+                    })
+                  : [...(playlistItem.videos || []), activeSaveVideo._id],
+                videoCount: shouldRemove
+                  ? Math.max(0, (playlistItem.videoCount || 0) - 1)
                   : (playlistItem.videoCount || 0) + 1,
               }
             : playlistItem
         )
       )
     } catch (error) {
-      console.error('Unable to save video to playlist:', error)
-      setSaveError(error.response?.data?.message || 'Unable to save video.')
+      console.error('Unable to update playlist save:', error)
+      setSaveError(error.response?.data?.message || 'Unable to update playlist.')
     } finally {
       setSavingPlaylistId('')
     }
@@ -782,13 +819,19 @@ export default function Watch() {
   const createPlaylistAndSave = async (event) => {
     event.preventDefault()
     const name = newPlaylistName.trim()
+    const description = newPlaylistDescription.trim()
 
     if (!name) {
       setSaveError('Playlist name is required.')
       return
     }
 
-    if (!canUseLiveStats) {
+    if (!description) {
+      setSaveError('Playlist description is required.')
+      return
+    }
+
+    if (!isObjectId(activeSaveVideo?._id)) {
       setSaveError('Only uploaded videos can be saved to playlists.')
       return
     }
@@ -799,23 +842,24 @@ export default function Watch() {
     try {
       const response = await apiClient.post('/playlist', {
         name,
-        description: `Saved videos from ${user?.username || 'VideoTube'}`,
+        description,
       })
       const createdPlaylist = response.data.data
 
-      await apiClient.patch(`/playlist/add/${video._id}/${createdPlaylist._id}`)
+      await apiClient.patch(`/playlist/add/${activeSaveVideo._id}/${createdPlaylist._id}`)
       setSavePlaylists((currentPlaylists) => [
         {
           ...createdPlaylist,
-          videos: [video._id],
+          videos: [activeSaveVideo._id],
           videoCount: 1,
           hasCurrentVideo: true,
-          previewVideo: video,
+          previewVideo: activeSaveVideo,
         },
         ...currentPlaylists,
       ])
       setShowNewPlaylistForm(false)
       setNewPlaylistName('')
+      setNewPlaylistDescription('')
     } catch (error) {
       console.error('Unable to create playlist:', error)
       setSaveError(error.response?.data?.message || 'Unable to create playlist.')
@@ -1014,11 +1058,11 @@ export default function Watch() {
                   <FaThumbsDown />
                 </button>
               </div>
-              <button className="action-pill" onClick={openShareDialog}>
+              <button className="action-pill" onClick={() => openShareDialog(video)}>
                 <FaShare />
                 <span>Share</span>
               </button>
-              <button className="action-pill" onClick={openSaveDialog}>
+              <button className="action-pill" onClick={() => openSaveDialog(video)}>
                 <FaBookmark />
                 <span>Save</span>
               </button>
@@ -1083,23 +1127,52 @@ export default function Watch() {
                 ) : (
                   <div className="playlist-list">
                     {playlist.map((item, index) => (
-                      <button
-                        key={item._id}
-                        className={`playlist-item ${item._id === video._id ? 'active' : ''}`}
-                        onClick={() => goToVideo(item, true)}
-                      >
-                        <span className="playlist-index">
-                          {item._id === video._id ? <FaPlay /> : index + 1}
-                        </span>
-                        <span className="playlist-thumb">
-                          <img src={item.thumbnail} alt="" />
-                          <span>{formatTime(item.duration)}</span>
-                        </span>
-                        <span className="playlist-copy">
-                          <strong>{item.title}</strong>
-                          <span>{item.owner.username || item.owner.fullName}</span>
-                        </span>
-                      </button>
+                      <article key={item._id} className={`playlist-item ${item._id === video._id ? 'active' : ''}`}>
+                        <button
+                          type="button"
+                          className="playlist-item-main"
+                          onClick={() => goToVideo(item, true)}
+                        >
+                          <span className="playlist-index">
+                            {item._id === video._id ? <FaPlay /> : index + 1}
+                          </span>
+                          <span className="playlist-thumb">
+                            <img src={item.thumbnail} alt="" />
+                            <span>{formatTime(item.duration)}</span>
+                          </span>
+                          <span className="playlist-copy">
+                            <strong>{item.title}</strong>
+                            <span>{item.owner.username || item.owner.fullName}</span>
+                          </span>
+                        </button>
+
+                        <div className="video-list-menu-wrap" onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            className="video-list-more"
+                            aria-label={`${item.title} actions`}
+                            aria-expanded={openVideoMenuId === item._id}
+                            onClick={() =>
+                              setOpenVideoMenuId((currentId) => (currentId === item._id ? '' : item._id))
+                            }
+                          >
+                            <FaEllipsisV />
+                          </button>
+
+                          {openVideoMenuId === item._id && (
+                            <div className="video-list-menu">
+                              <button type="button" onClick={() => openSaveDialog(item)}>
+                                <FaBookmark />
+                                <span>Save to playlist</span>
+                              </button>
+                              <button type="button" onClick={() => openShareDialog(item)}>
+                                <FaShare />
+                                <span>Share</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </article>
                     ))}
                   </div>
                 )}
@@ -1118,21 +1191,46 @@ export default function Watch() {
                   .filter((item) => item._id !== video._id)
                   .slice(0, 6)
                   .map((item) => (
-                    <button
-                      key={item._id}
-                      className="up-next-card"
-                      onClick={() => goToVideo(item, false)}
-                    >
-                      <span className="up-next-thumb">
-                        <img src={item.thumbnail} alt="" />
-                        <span>{formatTime(item.duration)}</span>
-                      </span>
-                      <span className="up-next-copy">
-                        <strong>{item.title}</strong>
-                        <span>{item.owner.username}</span>
-                        <span>{formatViews(item.views)} views</span>
-                      </span>
-                    </button>
+                    <article key={item._id} className="up-next-card">
+                      <button type="button" className="up-next-main" onClick={() => goToVideo(item, false)}>
+                        <span className="up-next-thumb">
+                          <img src={item.thumbnail} alt="" />
+                          <span>{formatTime(item.duration)}</span>
+                        </span>
+                        <span className="up-next-copy">
+                          <strong>{item.title}</strong>
+                          <span>{item.owner.username}</span>
+                          <span>{formatViews(item.views)} views</span>
+                        </span>
+                      </button>
+
+                      <div className="video-list-menu-wrap" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          className="video-list-more"
+                          aria-label={`${item.title} actions`}
+                          aria-expanded={openVideoMenuId === item._id}
+                          onClick={() =>
+                            setOpenVideoMenuId((currentId) => (currentId === item._id ? '' : item._id))
+                          }
+                        >
+                          <FaEllipsisV />
+                        </button>
+
+                        {openVideoMenuId === item._id && (
+                          <div className="video-list-menu">
+                            <button type="button" onClick={() => openSaveDialog(item)}>
+                              <FaBookmark />
+                              <span>Save to playlist</span>
+                            </button>
+                            <button type="button" onClick={() => openShareDialog(item)}>
+                              <FaShare />
+                              <span>Share</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
                   ))}
               </div>
             </>
@@ -1144,7 +1242,10 @@ export default function Watch() {
         <div
           className="share-modal-backdrop"
           role="presentation"
-          onMouseDown={() => setIsShareOpen(false)}
+          onMouseDown={() => {
+            setIsShareOpen(false)
+            setShareTargetVideo(null)
+          }}
         >
           <div
             className="share-modal"
@@ -1157,7 +1258,10 @@ export default function Watch() {
               <h2 id="share-modal-title">Share link</h2>
               <button
                 className="share-modal-close"
-                onClick={() => setIsShareOpen(false)}
+                onClick={() => {
+                  setIsShareOpen(false)
+                  setShareTargetVideo(null)
+                }}
                 aria-label="Close share dialog"
               >
                 <FaTimes />
@@ -1182,7 +1286,10 @@ export default function Watch() {
         <div
           className="save-modal-backdrop"
           role="presentation"
-          onMouseDown={() => setIsSaveOpen(false)}
+          onMouseDown={() => {
+            setIsSaveOpen(false)
+            setSaveTargetVideo(null)
+          }}
         >
           <section
             className="save-modal"
@@ -1193,7 +1300,14 @@ export default function Watch() {
           >
             <header className="save-modal-header">
               <h2 id="save-modal-title">Save to...</h2>
-              <button type="button" onClick={() => setIsSaveOpen(false)} aria-label="Close save dialog">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSaveOpen(false)
+                  setSaveTargetVideo(null)
+                }}
+                aria-label="Close save dialog"
+              >
                 <FaTimes />
               </button>
             </header>
@@ -1211,8 +1325,9 @@ export default function Watch() {
                     key={playlistItem._id}
                     type="button"
                     className={`save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
-                    onClick={() => saveToPlaylist(playlistItem._id)}
-                    disabled={savingPlaylistId === playlistItem._id || playlistItem.hasCurrentVideo}
+                    onClick={() => togglePlaylistSave(playlistItem._id)}
+                    disabled={savingPlaylistId === playlistItem._id}
+                    aria-pressed={playlistItem.hasCurrentVideo}
                   >
                     <span className="save-playlist-thumb">
                       {playlistItem.previewVideo?.thumbnail ? (
@@ -1223,7 +1338,7 @@ export default function Watch() {
                     </span>
                     <span className="save-playlist-copy">
                       <strong>{playlistItem.name}</strong>
-                      <span>Private</span>
+                      <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Playlist'}</span>
                     </span>
                     <span className="save-bookmark-icon">
                       <FaBookmark />
@@ -1243,11 +1358,29 @@ export default function Watch() {
                     setSaveError('')
                   }}
                   placeholder="Playlist name"
-                  maxLength="100"
+                  maxLength="150"
                   autoFocus
                 />
+                <textarea
+                  value={newPlaylistDescription}
+                  onChange={(event) => {
+                    setNewPlaylistDescription(event.target.value)
+                    setSaveError('')
+                  }}
+                  placeholder="Playlist description"
+                  maxLength="5000"
+                  rows="3"
+                />
                 <div>
-                  <button type="button" onClick={() => setShowNewPlaylistForm(false)}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewPlaylistForm(false)
+                      setNewPlaylistName('')
+                      setNewPlaylistDescription('')
+                      setSaveError('')
+                    }}
+                  >
                     Cancel
                   </button>
                   <button type="submit" disabled={creatingPlaylist}>

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   FaBookmark,
   FaEllipsisV,
-  FaHistory,
+  FaEye,
+  FaLayerGroup,
   FaPlay,
   FaPlus,
   FaRedoAlt,
   FaShare,
+  FaThumbsUp,
   FaTimes,
   FaTrash,
 } from 'react-icons/fa'
@@ -16,7 +18,7 @@ import Sidebar from '../components/Sidebar'
 import apiClient from '../lib/api'
 import { formatTimeAgo } from '../lib/time'
 import { useAuthStore } from '../store/authStore'
-import './History.css'
+import './LikedVideos.css'
 
 const formatCount = (value = 0) => {
   const count = Number.parseInt(value, 10) || 0
@@ -30,59 +32,38 @@ const formatDuration = (duration) => {
   if (typeof duration === 'string') return duration
 
   const totalSeconds = Math.max(0, Math.floor(duration))
-  const minutes = Math.floor(totalSeconds / 60)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
+
+  if (hours > 0) return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 }
 
-const getStartOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate())
+const normalizeLikedVideos = (data) => {
+  const source = Array.isArray(data) ? data : data?.videos || data?.docs || []
 
-const getHistoryGroupLabel = (dateValue) => {
-  const date = new Date(dateValue)
-  if (!Number.isFinite(date.getTime())) return 'Earlier'
-
-  const today = getStartOfDay(new Date())
-  const watchedDay = getStartOfDay(date)
-  const diffDays = Math.round((today.getTime() - watchedDay.getTime()) / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-
-  return new Intl.DateTimeFormat('en', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)
-}
-
-const normalizeHistory = (history = []) =>
-  history
+  return source
     .filter((video) => video?._id)
     .map((video) => ({
       ...video,
-      watchedAt: video.watchedAt || video.updatedAt || video.createdAt,
       uploadedAt: video.createdAt || video.uploadedAt,
+      likedAt: video.likedAt || video.updatedAt || video.createdAt,
     }))
-    .sort((firstVideo, secondVideo) => {
-      const firstTime = new Date(firstVideo.watchedAt || 0).getTime()
-      const secondTime = new Date(secondVideo.watchedAt || 0).getTime()
-      return secondTime - firstTime
-    })
+}
 
-export default function History() {
+export default function LikedVideos() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [history, setHistory] = useState([])
+  const [likedVideos, setLikedVideos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [openMenuKey, setOpenMenuKey] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [openMenuVideoId, setOpenMenuVideoId] = useState('')
+  const [removingVideoId, setRemovingVideoId] = useState('')
   const [shareVideo, setShareVideo] = useState(null)
   const [hasCopiedShareLink, setHasCopiedShareLink] = useState(false)
-  const [removingVideoId, setRemovingVideoId] = useState('')
-  const [isClearingHistory, setIsClearingHistory] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [actionError, setActionError] = useState('')
   const [saveVideo, setSaveVideo] = useState(null)
   const [savePlaylists, setSavePlaylists] = useState([])
   const [saveLoading, setSaveLoading] = useState(false)
@@ -105,41 +86,47 @@ export default function History() {
   }, [])
 
   useEffect(() => {
-    if (!openMenuKey) return undefined
-
-    const closeMenu = () => setOpenMenuKey('')
-    window.addEventListener('click', closeMenu)
-    return () => window.removeEventListener('click', closeMenu)
-  }, [openMenuKey])
-
-  useEffect(() => {
-    fetchHistory()
+    fetchLikedVideos()
   }, [])
 
-  const fetchHistory = async () => {
+  useEffect(() => {
+    if (!openMenuVideoId) return undefined
+
+    const closeMenu = () => setOpenMenuVideoId('')
+    window.addEventListener('click', closeMenu)
+    return () => window.removeEventListener('click', closeMenu)
+  }, [openMenuVideoId])
+
+  const fetchLikedVideos = async () => {
     setIsLoading(true)
     setError('')
 
     try {
-      const response = await apiClient.get('/users/history')
-      setHistory(normalizeHistory(response.data.data?.watchHistory || []))
+      const response = await apiClient.get('/like/videos', {
+        params: { limit: 100 },
+      })
+      setLikedVideos(normalizeLikedVideos(response.data.data))
       setActionError('')
-    } catch (historyError) {
-      console.error('Error fetching watch history:', historyError)
-      setError('Unable to load watch history right now.')
+    } catch (likedError) {
+      console.error('Unable to load liked videos:', likedError)
+      setError(likedError.response?.data?.message || 'Unable to load liked videos right now.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const groupedHistory = useMemo(() => {
-    return history.reduce((groups, video) => {
-      const label = getHistoryGroupLabel(video.watchedAt)
-      if (!groups[label]) groups[label] = []
-      groups[label].push(video)
-      return groups
-    }, {})
-  }, [history])
+  const totalViews = useMemo(
+    () => likedVideos.reduce((sum, video) => sum + (Number.parseInt(video.views, 10) || 0), 0),
+    [likedVideos]
+  )
+
+  const openVideo = (video) => {
+    navigate(`/watch/${video._id}`)
+  }
+
+  const playAll = () => {
+    if (likedVideos[0]) openVideo(likedVideos[0])
+  }
 
   const getShareUrl = (videoId) => {
     if (typeof window === 'undefined') return `/watch/${videoId}`
@@ -147,7 +134,7 @@ export default function History() {
   }
 
   const openShareDialog = (video) => {
-    setOpenMenuKey('')
+    setOpenMenuVideoId('')
     setShareVideo(video)
     setHasCopiedShareLink(false)
   }
@@ -218,7 +205,7 @@ export default function History() {
   }
 
   const openSaveDialog = (video) => {
-    setOpenMenuKey('')
+    setOpenMenuVideoId('')
     setSaveVideo(video)
     setSaveError('')
     setShowNewPlaylistForm(false)
@@ -329,199 +316,186 @@ export default function History() {
     }
   }
 
-  const removeFromHistory = async (videoId) => {
-    setOpenMenuKey('')
+  const removeFromLikedVideos = async (videoId) => {
+    if (removingVideoId) return
+
+    setOpenMenuVideoId('')
     setActionError('')
     setRemovingVideoId(videoId)
 
     try {
-      await apiClient.delete(`/users/history/${videoId}`)
-      setHistory((currentHistory) => currentHistory.filter((video) => video._id !== videoId))
+      const response = await apiClient.post(`/like/toggle/v/${videoId}`)
+
+      if (response.data.data?.isLiked) {
+        await apiClient.post(`/like/toggle/v/${videoId}`)
+      }
+
+      setLikedVideos((currentVideos) => currentVideos.filter((video) => video._id !== videoId))
     } catch (removeError) {
-      console.error('Unable to remove video from watch history:', removeError)
-      setActionError(removeError.response?.data?.message || 'Unable to remove video from history.')
+      console.error('Unable to remove liked video:', removeError)
+      setActionError(removeError.response?.data?.message || 'Unable to remove video from liked videos.')
     } finally {
       setRemovingVideoId('')
     }
   }
 
-  const clearAllHistory = async () => {
-    if (history.length === 0 || isClearingHistory) return
-
-    setActionError('')
-    setIsClearingHistory(true)
-
-    try {
-      await apiClient.delete('/users/history')
-      setHistory([])
-      setShowClearConfirm(false)
-    } catch (clearError) {
-      console.error('Unable to clear watch history:', clearError)
-      setActionError(clearError.response?.data?.message || 'Unable to clear watch history.')
-    } finally {
-      setIsClearingHistory(false)
-    }
-  }
-
   return (
-    <div className="history-container">
+    <div className="liked-videos-container">
       <Navbar onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} sidebarOpen={sidebarOpen} />
 
-      <div className="history-layout">
+      <div className="liked-videos-layout">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-        <main className="history-main">
-          <div className="history-content">
-            <section className="history-feed">
-              <header className="history-header">
-                <div>
-                  <h1>Watch history</h1>
-                  <span>Recently watched videos, grouped by when you watched them</span>
-                </div>
-                <div className="history-header-actions">
-                  <button type="button" onClick={fetchHistory} disabled={isLoading}>
-                    <FaRedoAlt />
-                    <span>Refresh</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowClearConfirm(true)}
-                    disabled={isLoading || history.length === 0 || isClearingHistory}
-                  >
-                    <FaTrash />
-                    <span>{isClearingHistory ? 'Clearing' : 'Clear watch history'}</span>
-                  </button>
-                </div>
-              </header>
-
-              {isLoading ? (
-                <div className="history-list">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <div key={index} className="history-skeleton">
-                      <span />
-                      <div>
-                        <strong />
-                        <em />
-                        <small />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : error ? (
-                <div className="history-empty">
-                  <FaHistory />
-                  <h2>History unavailable</h2>
-                  <p>{error}</p>
-                  <button type="button" onClick={fetchHistory}>Try again</button>
-                </div>
-              ) : history.length === 0 ? (
-                <div className="history-empty">
-                  <FaHistory />
-                  <h2>No watch history yet</h2>
-                  <p>Videos you watch will appear here.</p>
-                </div>
+        <main className="liked-videos-main">
+          <section className="liked-videos-hero">
+            <div className="liked-videos-cover">
+              {likedVideos[0]?.thumbnail ? (
+                <img src={likedVideos[0].thumbnail} alt="" />
               ) : (
-                <div className="history-groups">
-                  {actionError && <div className="history-action-error">{actionError}</div>}
-                  {Object.entries(groupedHistory).map(([label, videos]) => (
-                    <section key={label} className="history-group">
-                      <h2>{label}</h2>
-                      <div className="history-list">
-                        {videos.map((video) => {
-                          const menuKey = `${video._id}-${video.watchedAt}`
-
-                          return (
-                            <div key={menuKey} className="history-video-row">
-                              <button
-                                className="history-video"
-                                onClick={() => navigate(`/watch/${video._id}`)}
-                              >
-                                <span className="history-thumb">
-                                  <img src={video.thumbnail} alt="" />
-                                  <span>{formatDuration(video.duration)}</span>
-                                  <i><FaPlay /></i>
-                                </span>
-                                <span className="history-copy">
-                                  <strong>{video.title}</strong>
-                                  <span>{video.owner?.username || video.owner?.fullName || 'Unknown channel'}</span>
-                                  <span>
-                                    {formatCount(video.views)} views - watched {formatTimeAgo(video.watchedAt)}
-                                  </span>
-                                </span>
-                              </button>
-
-                              <div className="history-action-wrap" onClick={(event) => event.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  className="history-more-button"
-                                  aria-label="Video actions"
-                                  aria-expanded={openMenuKey === menuKey}
-                                  onClick={() =>
-                                    setOpenMenuKey((currentKey) => (currentKey === menuKey ? '' : menuKey))
-                                  }
-                                  disabled={removingVideoId === video._id}
-                                >
-                                  <FaEllipsisV />
-                                </button>
-
-                                {openMenuKey === menuKey && (
-                                  <div className="history-action-menu">
-                                    <button type="button" onClick={() => openSaveDialog(video)}>
-                                      <FaBookmark />
-                                      <span>Save to playlist</span>
-                                    </button>
-                                    <button type="button" onClick={() => openShareDialog(video)}>
-                                      <FaShare />
-                                      <span>Share</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="danger"
-                                      onClick={() => removeFromHistory(video._id)}
-                                      disabled={removingVideoId === video._id}
-                                    >
-                                      <FaTrash />
-                                      <span>
-                                        {removingVideoId === video._id
-                                          ? 'Removing'
-                                          : 'Remove from watch history'}
-                                      </span>
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </section>
-                  ))}
-                </div>
+                <FaThumbsUp />
               )}
-            </section>
+            </div>
+            <div className="liked-videos-summary">
+              <span className="liked-videos-kicker">
+                <FaThumbsUp />
+                Liked videos
+              </span>
+              <h1>Liked videos</h1>
+              <p>
+                {likedVideos.length} {likedVideos.length === 1 ? 'video' : 'videos'} - {formatCount(totalViews)} views
+              </p>
+              <div className="liked-videos-actions">
+                <button type="button" onClick={playAll} disabled={likedVideos.length === 0}>
+                  <FaPlay />
+                  <span>Play all</span>
+                </button>
+                <button type="button" onClick={fetchLikedVideos} disabled={isLoading}>
+                  <FaRedoAlt />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+          </section>
 
-          </div>
+          <section className="liked-videos-feed">
+            {isLoading ? (
+              <div className="liked-videos-list">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="liked-video-skeleton">
+                    <span />
+                    <div>
+                      <strong />
+                      <em />
+                      <small />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : error ? (
+              <div className="liked-videos-empty">
+                <FaLayerGroup />
+                <h2>Liked videos unavailable</h2>
+                <p>{error}</p>
+                <button type="button" onClick={fetchLikedVideos}>
+                  Try again
+                </button>
+              </div>
+            ) : likedVideos.length === 0 ? (
+              <div className="liked-videos-empty">
+                <FaThumbsUp />
+                <h2>No liked videos yet</h2>
+                <p>Videos you like will appear here.</p>
+              </div>
+            ) : (
+              <div className="liked-videos-list">
+                {actionError && <div className="liked-videos-action-error">{actionError}</div>}
+                {likedVideos.map((video, index) => (
+                  <article key={video._id} className="liked-video-row">
+                    <span className="liked-video-index">{index + 1}</span>
+                    <button type="button" className="liked-video" onClick={() => openVideo(video)}>
+                      <span className="liked-video-thumb">
+                        <img src={video.thumbnail} alt="" />
+                        <span>{formatDuration(video.duration)}</span>
+                        <i>
+                          <FaPlay />
+                        </i>
+                      </span>
+                      <span className="liked-video-copy">
+                        <strong>{video.title}</strong>
+                        <span>{video.owner?.username || video.owner?.fullName || 'Unknown channel'}</span>
+                        <span>
+                          <FaEye />
+                          {formatCount(video.views)} views - liked {formatTimeAgo(video.likedAt)}
+                        </span>
+                      </span>
+                    </button>
+
+                    <div className="liked-video-action-wrap" onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="liked-video-more-button"
+                        aria-label={`${video.title} actions`}
+                        aria-expanded={openMenuVideoId === video._id}
+                        onClick={() =>
+                          setOpenMenuVideoId((currentVideoId) =>
+                            currentVideoId === video._id ? '' : video._id
+                          )
+                        }
+                        disabled={removingVideoId === video._id}
+                      >
+                        <FaEllipsisV />
+                      </button>
+
+                      {openMenuVideoId === video._id && (
+                        <div className="liked-video-action-menu">
+                          <button type="button" onClick={() => openSaveDialog(video)}>
+                            <FaBookmark />
+                            <span>Save to playlist</span>
+                          </button>
+                          <button type="button" onClick={() => openShareDialog(video)}>
+                            <FaShare />
+                            <span>Share</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={() => removeFromLikedVideos(video._id)}
+                            disabled={removingVideoId === video._id}
+                          >
+                            <FaTrash />
+                            <span>
+                              {removingVideoId === video._id ? 'Removing' : 'Remove from liked videos'}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </main>
       </div>
 
       {shareVideo && (
         <div
-          className="history-share-backdrop"
+          className="liked-share-backdrop"
           role="presentation"
           onMouseDown={() => setShareVideo(null)}
         >
           <div
-            className="history-share-modal"
+            className="liked-share-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="history-share-title"
+            aria-labelledby="liked-share-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <div className="history-share-header">
-              <h2 id="history-share-title">Share link</h2>
+            <div className="liked-share-header">
+              <h2 id="liked-share-title">Share link</h2>
               <button
                 type="button"
-                className="history-share-close"
+                className="liked-share-close"
                 onClick={() => setShareVideo(null)}
                 aria-label="Close share dialog"
               >
@@ -529,7 +503,7 @@ export default function History() {
               </button>
             </div>
 
-            <div className="history-share-link-box">
+            <div className="liked-share-link-box">
               <input
                 type="text"
                 value={getShareUrl(shareVideo._id)}
@@ -547,53 +521,53 @@ export default function History() {
 
       {saveVideo && (
         <div
-          className="history-save-backdrop"
+          className="liked-save-backdrop"
           role="presentation"
           onMouseDown={closeSaveDialog}
         >
           <section
-            className="history-save-modal"
+            className="liked-save-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="history-save-title"
+            aria-labelledby="liked-save-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
-            <header className="history-save-header">
-              <h2 id="history-save-title">Save to...</h2>
+            <header className="liked-save-header">
+              <h2 id="liked-save-title">Save to...</h2>
               <button type="button" onClick={closeSaveDialog} aria-label="Close save dialog">
                 <FaTimes />
               </button>
             </header>
 
-            <div className="history-save-playlist-list">
+            <div className="liked-save-playlist-list">
               {saveLoading ? (
-                <div className="history-save-state">Loading playlists...</div>
+                <div className="liked-save-state">Loading playlists...</div>
               ) : saveError ? (
-                <div className="history-save-state error">{saveError}</div>
+                <div className="liked-save-state error">{saveError}</div>
               ) : savePlaylists.length === 0 ? (
-                <div className="history-save-state">No playlists yet</div>
+                <div className="liked-save-state">No playlists yet</div>
               ) : (
                 savePlaylists.map((playlistItem) => (
                   <button
                     key={playlistItem._id}
                     type="button"
-                    className={`history-save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
+                    className={`liked-save-playlist-item ${playlistItem.hasCurrentVideo ? 'saved' : ''}`}
                     onClick={() => togglePlaylistSave(playlistItem._id)}
                     disabled={savingPlaylistId === playlistItem._id}
                     aria-pressed={playlistItem.hasCurrentVideo}
                   >
-                    <span className="history-save-playlist-thumb">
+                    <span className="liked-save-playlist-thumb">
                       {playlistItem.previewVideo?.thumbnail ? (
                         <img src={playlistItem.previewVideo.thumbnail} alt="" />
                       ) : (
                         <FaBookmark />
                       )}
                     </span>
-                    <span className="history-save-playlist-copy">
+                    <span className="liked-save-playlist-copy">
                       <strong>{playlistItem.name}</strong>
                       <span>{playlistItem.hasCurrentVideo ? 'Saved' : 'Playlist'}</span>
                     </span>
-                    <span className="history-save-bookmark-icon">
+                    <span className="liked-save-bookmark-icon">
                       <FaBookmark />
                     </span>
                   </button>
@@ -602,7 +576,7 @@ export default function History() {
             </div>
 
             {showNewPlaylistForm ? (
-              <form className="history-new-playlist-form" onSubmit={createPlaylistAndSave}>
+              <form className="liked-new-playlist-form" onSubmit={createPlaylistAndSave}>
                 <input
                   type="text"
                   value={newPlaylistName}
@@ -644,7 +618,7 @@ export default function History() {
             ) : (
               <button
                 type="button"
-                className="history-new-playlist-button"
+                className="liked-new-playlist-button"
                 onClick={() => {
                   setSaveError('')
                   setShowNewPlaylistForm(true)
@@ -655,45 +629,6 @@ export default function History() {
               </button>
             )}
           </section>
-        </div>
-      )}
-
-      {showClearConfirm && (
-        <div
-          className="history-confirm-backdrop"
-          role="presentation"
-          onMouseDown={() => {
-            if (!isClearingHistory) setShowClearConfirm(false)
-          }}
-        >
-          <div
-            className="history-confirm-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="history-clear-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <h2 id="history-clear-title">Clear watch history?</h2>
-            <p>This will remove all videos from your watch history.</p>
-            <div className="history-confirm-actions">
-              <button
-                type="button"
-                className="history-confirm-cancel"
-                onClick={() => setShowClearConfirm(false)}
-                disabled={isClearingHistory}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="history-confirm-delete"
-                onClick={clearAllHistory}
-                disabled={isClearingHistory}
-              >
-                {isClearingHistory ? 'Clearing' : 'Clear history'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
