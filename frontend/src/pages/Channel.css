@@ -222,6 +222,29 @@
   font-size: 0.9rem;
 }
 
+.channel-video-visibility {
+  width: max-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin-top: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.channel-video-visibility.public {
+  color: #0b6b38;
+  background: #dff7e9;
+}
+
+.channel-video-visibility.private {
+  color: #72510d;
+  background: #fff2c2;
+}
+
 .channel-video-meta {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 38px;
@@ -291,6 +314,10 @@
 
 .channel-video-menu button:hover {
   background: #f2f2f2;
+}
+
+.channel-video-menu button.active {
+  background: #ececec;
 }
 
 .channel-video-menu button.danger {
@@ -427,9 +454,18 @@
   background: #c91c36;
 }
 
+.channel-confirm-save {
+  color: #fff;
+  background: #0f0f0f;
+}
+
 .channel-tweet-actions .danger:hover,
 .channel-confirm-delete:hover {
   background: #a9152b;
+}
+
+.channel-confirm-save:hover {
+  background: #303030;
 }
 
 .channel-tweet-actions button:disabled,
@@ -905,8 +941,22 @@
     background: #3a3a3a;
   }
 
+  .channel-video-menu button.active {
+    background: #3a3a3a;
+  }
+
   .channel-video-menu button.danger {
     color: #ffb4ab;
+  }
+
+  .channel-video-visibility.public {
+    color: #b7f7ce;
+    background: #173f27;
+  }
+
+  .channel-video-visibility.private {
+    color: #ffe8a1;
+    background: #463813;
   }
 
   .channel-video-more {

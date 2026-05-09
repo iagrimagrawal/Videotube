@@ -10,6 +10,8 @@ import {
   FaEllipsisV,
   FaExpand,
   FaPause,
+  FaPen,
+  FaPaperPlane,
   FaPlay,
   FaPlus,
   FaRedoAlt,
@@ -19,6 +21,7 @@ import {
   FaThumbsDown,
   FaThumbsUp,
   FaTimes,
+  FaTrash,
   FaVolumeUp,
 } from 'react-icons/fa'
 import Navbar from '../components/Navbar'
@@ -208,6 +211,52 @@ const normalizePlaylistVideo = (item) => {
   }
 }
 
+const mockComments = [
+  {
+    _id: 'comment-1',
+    content:
+      'This explanation finally made the pointer movement click for me. The dry run was the most useful part.',
+    createdAt: '2026-04-27T08:20:00.000Z',
+    likeCount: 128,
+    isLiked: false,
+    isOwner: false,
+    owner: {
+      _id: 'mock-user-1',
+      username: 'linkedlistlearner',
+      fullName: 'Linked List Learner',
+      avatar: 'https://picsum.photos/seed/comment-avatar-1/80/80',
+    },
+  },
+  {
+    _id: 'comment-2',
+    content: 'Can you also cover the recursive version with the same visual style?',
+    createdAt: '2026-04-29T12:10:00.000Z',
+    likeCount: 42,
+    isLiked: true,
+    isOwner: false,
+    owner: {
+      _id: 'mock-user-2',
+      username: 'recursionfan',
+      fullName: 'Recursion Fan',
+      avatar: 'https://picsum.photos/seed/comment-avatar-2/80/80',
+    },
+  },
+]
+
+const normalizeComment = (comment, currentUser) => ({
+  ...comment,
+  likeCount: comment?.likeCount || 0,
+  isLiked: Boolean(comment?.isLiked),
+  isDisliked: Boolean(comment?.isDisliked),
+  isOwner: Boolean(comment?.isOwner || (currentUser?._id && comment?.owner?._id === currentUser._id)),
+  owner: {
+    _id: comment?.owner?._id || 'unknown-user',
+    username: comment?.owner?.username || 'viewer',
+    fullName: comment?.owner?.fullName || comment?.owner?.username || 'Viewer',
+    avatar: comment?.owner?.avatar || currentUser?.avatar || 'https://picsum.photos/seed/default-comment-avatar/80/80',
+  },
+})
+
 const WatchSkeleton = () => (
   <main className="watch-content watch-skeleton" aria-busy="true" aria-label="Loading video">
     <section className="watch-primary">
@@ -267,6 +316,7 @@ export default function Watch() {
   const [duration, setDuration] = useState(initialMockVideo?.duration || 0)
   const [playbackRate, setPlaybackRate] = useState(1)
   const [muted, setMuted] = useState(false)
+  const [autoplay, setAutoplay] = useState(false)
   const [isFullMode, setIsFullMode] = useState(false)
   const [interactionStats, setInteractionStats] = useState({
     views: initialMockVideo?.views || 0,
@@ -298,6 +348,18 @@ export default function Watch() {
   const [playlistError, setPlaylistError] = useState('')
   const [isPlaylistCollapsed, setIsPlaylistCollapsed] = useState(false)
   const [openVideoMenuId, setOpenVideoMenuId] = useState('')
+  const [comments, setComments] = useState([])
+  const [commentCount, setCommentCount] = useState(0)
+  const [commentsPage, setCommentsPage] = useState(1)
+  const [hasMoreComments, setHasMoreComments] = useState(false)
+  const [isLoadingComments, setIsLoadingComments] = useState(false)
+  const [commentError, setCommentError] = useState('')
+  const [commentDraft, setCommentDraft] = useState('')
+  const [isCommentFocused, setIsCommentFocused] = useState(false)
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
+  const [editingCommentId, setEditingCommentId] = useState('')
+  const [editingCommentContent, setEditingCommentContent] = useState('')
+  const [pendingCommentActionId, setPendingCommentActionId] = useState('')
 
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const activeListId = searchParams.get('list')
@@ -410,6 +472,66 @@ export default function Watch() {
       window.clearInterval(intervalId)
     }
   }, [canUseLiveStats, isLoadingVideo, video, video?._id, video?.views, video?.likeCount, video?.isLiked, video?.owner?.subscriberCount, video?.isSubscribed])
+
+  useEffect(() => {
+    setCommentDraft('')
+    setIsCommentFocused(false)
+    setEditingCommentId('')
+    setEditingCommentContent('')
+    setCommentError('')
+
+    if (!video || isLoadingVideo) {
+      setComments([])
+      setCommentCount(0)
+      setHasMoreComments(false)
+      return undefined
+    }
+
+    if (!canUseLiveStats) {
+      const nextComments = mockComments.map((comment) => normalizeComment(comment, user))
+      setComments(nextComments)
+      setCommentCount(nextComments.length)
+      setCommentsPage(1)
+      setHasMoreComments(false)
+      return undefined
+    }
+
+    let isMounted = true
+
+    const fetchComments = async () => {
+      setIsLoadingComments(true)
+      setCommentError('')
+
+      try {
+        const response = await apiClient.get(`/comments/${video._id}`, {
+          params: { page: 1, limit: 10 },
+        })
+        if (!isMounted) return
+
+        const data = response.data.data
+        const nextComments = (data.comments || []).map((comment) => normalizeComment(comment, user))
+        setComments(nextComments)
+        setCommentCount(data.total || nextComments.length)
+        setCommentsPage(data.page || 1)
+        setHasMoreComments((data.page || 1) < (data.totalPages || 1))
+      } catch (error) {
+        if (!isMounted) return
+        console.error('Unable to load comments:', error)
+        setComments([])
+        setCommentCount(0)
+        setHasMoreComments(false)
+        setCommentError(error.response?.data?.message || 'Unable to load comments.')
+      } finally {
+        if (isMounted) setIsLoadingComments(false)
+      }
+    }
+
+    fetchComments()
+
+    return () => {
+      isMounted = false
+    }
+  }, [canUseLiveStats, isLoadingVideo, user, video, video?._id])
 
   useEffect(() => {
     if (!activeListId) {
@@ -579,6 +701,15 @@ export default function Watch() {
 
     const previousIndex = currentIndex <= 0 ? playlist.length - 1 : currentIndex - 1
     goToVideo(playlist[previousIndex])
+  }
+
+  const handleVideoEnded = () => {
+    if (autoplay) {
+      goToNext()
+      return
+    }
+
+    setPlaying(false)
   }
 
   const replayVideo = () => {
@@ -868,6 +999,254 @@ export default function Watch() {
     }
   }
 
+  const loadMoreComments = async () => {
+    if (!canUseLiveStats || isLoadingComments || !hasMoreComments) return
+
+    const nextPage = commentsPage + 1
+    setIsLoadingComments(true)
+    setCommentError('')
+
+    try {
+      const response = await apiClient.get(`/comments/${video._id}`, {
+        params: { page: nextPage, limit: 10 },
+      })
+      const data = response.data.data
+      const nextComments = (data.comments || []).map((comment) => normalizeComment(comment, user))
+      setComments((currentComments) => [...currentComments, ...nextComments])
+      setCommentCount(data.total || commentCount)
+      setCommentsPage(data.page || nextPage)
+      setHasMoreComments((data.page || nextPage) < (data.totalPages || nextPage))
+    } catch (error) {
+      console.error('Unable to load more comments:', error)
+      setCommentError(error.response?.data?.message || 'Unable to load more comments.')
+    } finally {
+      setIsLoadingComments(false)
+    }
+  }
+
+  const submitComment = async (event) => {
+    event.preventDefault()
+    const content = commentDraft.trim()
+
+    if (!content || isSubmittingComment) return
+
+    if (!canUseLiveStats) {
+      const newComment = normalizeComment(
+        {
+          _id: `comment-${Date.now()}`,
+          content,
+          createdAt: new Date().toISOString(),
+          likeCount: 0,
+          isLiked: false,
+          isOwner: true,
+          owner: user || {
+            username: 'you',
+            fullName: 'You',
+            avatar: 'https://picsum.photos/seed/default-comment-avatar/80/80',
+          },
+        },
+        user
+      )
+      setComments((currentComments) => [newComment, ...currentComments])
+      setCommentCount((currentCount) => currentCount + 1)
+      setCommentDraft('')
+      setIsCommentFocused(false)
+      return
+    }
+
+    setIsSubmittingComment(true)
+    setCommentError('')
+
+    try {
+      const response = await apiClient.post(`/comments/${video._id}`, { content })
+      const createdComment = normalizeComment(response.data.data, user)
+      setComments((currentComments) => [createdComment, ...currentComments])
+      setCommentCount((currentCount) => currentCount + 1)
+      setCommentDraft('')
+      setIsCommentFocused(false)
+    } catch (error) {
+      console.error('Unable to add comment:', error)
+      setCommentError(error.response?.data?.message || 'Unable to add comment.')
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }
+
+  const startEditingComment = (comment) => {
+    setEditingCommentId(comment._id)
+    setEditingCommentContent(comment.content)
+    setCommentError('')
+  }
+
+  const cancelEditingComment = () => {
+    setEditingCommentId('')
+    setEditingCommentContent('')
+  }
+
+  const saveEditedComment = async (commentId) => {
+    const content = editingCommentContent.trim()
+    if (!content || pendingCommentActionId) return
+
+    if (!canUseLiveStats) {
+      setComments((currentComments) =>
+        currentComments.map((comment) => (comment._id === commentId ? { ...comment, content } : comment))
+      )
+      cancelEditingComment()
+      return
+    }
+
+    setPendingCommentActionId(commentId)
+    setCommentError('')
+
+    try {
+      const response = await apiClient.patch(`/comments/c/${commentId}`, { content })
+      const updatedComment = normalizeComment(response.data.data, user)
+      setComments((currentComments) =>
+        currentComments.map((comment) =>
+          comment._id === commentId
+            ? {
+                ...comment,
+                ...updatedComment,
+                likeCount: comment.likeCount,
+                isLiked: comment.isLiked,
+              }
+            : comment
+        )
+      )
+      cancelEditingComment()
+    } catch (error) {
+      console.error('Unable to update comment:', error)
+      setCommentError(error.response?.data?.message || 'Unable to update comment.')
+    } finally {
+      setPendingCommentActionId('')
+    }
+  }
+
+  const deleteComment = async (commentId) => {
+    if (pendingCommentActionId) return
+
+    if (!canUseLiveStats) {
+      setComments((currentComments) => currentComments.filter((comment) => comment._id !== commentId))
+      setCommentCount((currentCount) => Math.max(0, currentCount - 1))
+      return
+    }
+
+    setPendingCommentActionId(commentId)
+    setCommentError('')
+
+    try {
+      await apiClient.delete(`/comments/c/${commentId}`)
+      setComments((currentComments) => currentComments.filter((comment) => comment._id !== commentId))
+      setCommentCount((currentCount) => Math.max(0, currentCount - 1))
+    } catch (error) {
+      console.error('Unable to delete comment:', error)
+      setCommentError(error.response?.data?.message || 'Unable to delete comment.')
+    } finally {
+      setPendingCommentActionId('')
+    }
+  }
+
+  const toggleCommentLike = async (commentId) => {
+    if (pendingCommentActionId) return
+
+    const applyOptimisticLike = (currentComments) =>
+      currentComments.map((comment) => {
+        if (comment._id !== commentId) return comment
+
+        const nextIsLiked = !comment.isLiked
+        return {
+          ...comment,
+          isLiked: nextIsLiked,
+          isDisliked: false,
+          likeCount: Math.max(0, (Number.parseInt(comment.likeCount, 10) || 0) + (nextIsLiked ? 1 : -1)),
+        }
+      })
+
+    if (!canUseLiveStats) {
+      setComments(applyOptimisticLike)
+      return
+    }
+
+    const previousComments = comments
+    setComments(applyOptimisticLike)
+    setPendingCommentActionId(commentId)
+
+    try {
+      const response = await apiClient.post(`/like/toggle/c/${commentId}`)
+      setComments((currentComments) =>
+        currentComments.map((comment) =>
+          comment._id === commentId
+            ? {
+                ...comment,
+                isLiked: response.data.data.isLiked,
+                isDisliked: false,
+                likeCount: response.data.data.likeCount,
+              }
+            : comment
+        )
+      )
+    } catch (error) {
+      console.error('Unable to toggle comment like:', error)
+      setComments(previousComments)
+      setCommentError(error.response?.data?.message || 'Unable to update comment like.')
+    } finally {
+      setPendingCommentActionId('')
+    }
+  }
+
+  const toggleCommentDislike = async (commentId) => {
+    if (pendingCommentActionId) return
+
+    const targetComment = comments.find((comment) => comment._id === commentId)
+    if (!targetComment) return
+
+    const shouldDislike = !targetComment.isDisliked
+    const shouldRemoveLike = shouldDislike && targetComment.isLiked
+    const previousComments = comments
+
+    setComments((currentComments) =>
+      currentComments.map((comment) =>
+        comment._id === commentId
+          ? {
+              ...comment,
+              isDisliked: shouldDislike,
+              isLiked: shouldRemoveLike ? false : comment.isLiked,
+              likeCount: shouldRemoveLike
+                ? Math.max(0, (Number.parseInt(comment.likeCount, 10) || 0) - 1)
+                : comment.likeCount,
+            }
+          : comment
+      )
+    )
+
+    if (!canUseLiveStats || !shouldRemoveLike) return
+
+    setPendingCommentActionId(commentId)
+    setCommentError('')
+
+    try {
+      const response = await apiClient.post(`/like/toggle/c/${commentId}`)
+      setComments((currentComments) =>
+        currentComments.map((comment) =>
+          comment._id === commentId
+            ? {
+                ...comment,
+                isLiked: false,
+                isDisliked: true,
+                likeCount: response.data.data.likeCount,
+              }
+            : comment
+        )
+      )
+    } catch (error) {
+      console.error('Unable to dislike comment:', error)
+      setComments(previousComments)
+      setCommentError(error.response?.data?.message || 'Unable to update comment dislike.')
+    } finally {
+      setPendingCommentActionId('')
+    }
+  }
+
   if (isLoadingVideo) {
     return (
       <div className={`watch-shell ${isFullMode ? 'full-mode' : ''}`}>
@@ -920,7 +1299,7 @@ export default function Watch() {
               playsinline
               onDuration={(value) => setDuration(value || video.duration || 0)}
               onProgress={({ playedSeconds: nextSeconds }) => setPlayedSeconds(nextSeconds)}
-              onEnded={goToNext}
+              onEnded={handleVideoEnded}
             />
 
             <div className="watch-controls">
@@ -998,6 +1377,21 @@ export default function Watch() {
                       ))}
                     </select>
                   </label>
+                  <button
+                    type="button"
+                    className={`autoplay-toggle ${autoplay ? 'active' : ''}`}
+                    role="switch"
+                    aria-checked={autoplay}
+                    aria-label={autoplay ? 'Turn autoplay off' : 'Turn autoplay on'}
+                    title={autoplay ? 'Autoplay is on' : 'Autoplay is off'}
+                    onClick={() => setAutoplay((current) => !current)}
+                  >
+                    <span className="autoplay-toggle-track">
+                      <span className="autoplay-toggle-thumb">
+                        <FaPlay />
+                      </span>
+                    </span>
+                  </button>
                   <button className="watch-icon-button" aria-label="Captions" title="Captions">
                     <FaClosedCaptioning />
                   </button>
@@ -1076,6 +1470,157 @@ export default function Watch() {
             </strong>
             <p>{video.description}</p>
           </div>
+
+          <section className="comments-section" aria-labelledby="comments-title">
+            <div className="comments-header">
+              <h2 id="comments-title">{formatCount(commentCount)} Comments</h2>
+            </div>
+
+            <form className="comment-composer" onSubmit={submitComment}>
+              <img
+                src={user?.avatar || 'https://picsum.photos/seed/current-user-comment/80/80'}
+                alt=""
+                className="comment-avatar"
+              />
+              <div className="comment-composer-main">
+                <input
+                  type="text"
+                  value={commentDraft}
+                  onFocus={() => setIsCommentFocused(true)}
+                  onChange={(event) => {
+                    setCommentDraft(event.target.value)
+                    setCommentError('')
+                  }}
+                  placeholder="Add a comment..."
+                  maxLength="500"
+                />
+                {(isCommentFocused || commentDraft) && (
+                  <div className="comment-composer-actions">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCommentDraft('')
+                        setIsCommentFocused(false)
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" disabled={!commentDraft.trim() || isSubmittingComment}>
+                      <FaPaperPlane />
+                      <span>{isSubmittingComment ? 'Commenting' : 'Comment'}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </form>
+
+            {commentError && <div className="comments-state error">{commentError}</div>}
+
+            {isLoadingComments && comments.length === 0 ? (
+              <div className="comments-state">Loading comments...</div>
+            ) : comments.length === 0 ? (
+              <div className="comments-state">No comments yet. Start the conversation.</div>
+            ) : (
+              <div className="comments-list">
+                {comments.map((comment) => (
+                  <article key={comment._id} className="comment-item">
+                    <img src={comment.owner.avatar} alt="" className="comment-avatar" />
+                    <div className="comment-body">
+                      <div className="comment-topline">
+                        <strong>@{comment.owner.username}</strong>
+                        <span>{formatTimeAgo(comment.createdAt)}</span>
+                      </div>
+
+                      {editingCommentId === comment._id ? (
+                        <div className="comment-edit-box">
+                          <textarea
+                            value={editingCommentContent}
+                            onChange={(event) => setEditingCommentContent(event.target.value)}
+                            maxLength="500"
+                            rows="3"
+                            autoFocus
+                          />
+                          <div className="comment-edit-actions">
+                            <button type="button" onClick={cancelEditingComment}>
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => saveEditedComment(comment._id)}
+                              disabled={!editingCommentContent.trim() || pendingCommentActionId === comment._id}
+                            >
+                              Save
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p>{comment.content}</p>
+                      )}
+
+                      {editingCommentId !== comment._id && (
+                        <div className="comment-actions">
+                          <button
+                            type="button"
+                            className={comment.isLiked ? 'active' : ''}
+                            onClick={() => toggleCommentLike(comment._id)}
+                            disabled={pendingCommentActionId === comment._id}
+                            aria-label={comment.isLiked ? 'Unlike comment' : 'Like comment'}
+                          >
+                            <FaThumbsUp />
+                            <span>{formatCount(comment.likeCount)}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={comment.isDisliked ? 'active' : ''}
+                            onClick={() => toggleCommentDislike(comment._id)}
+                            aria-label={comment.isDisliked ? 'Remove comment dislike' : 'Dislike comment'}
+                          >
+                            <FaThumbsDown />
+                          </button>
+                          <button type="button" className="comment-reply-button">
+                            Reply
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {comment.isOwner && editingCommentId !== comment._id && (
+                      <div className="comment-owner-actions">
+                        <button
+                          type="button"
+                          onClick={() => startEditingComment(comment)}
+                          aria-label="Edit comment"
+                          title="Edit"
+                        >
+                          <FaPen />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteComment(comment._id)}
+                          disabled={pendingCommentActionId === comment._id}
+                          aria-label="Delete comment"
+                          title="Delete"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+
+            {hasMoreComments && (
+              <button
+                type="button"
+                className="load-comments-button"
+                onClick={loadMoreComments}
+                disabled={isLoadingComments}
+              >
+                {isLoadingComments ? 'Loading...' : 'Show more comments'}
+              </button>
+            )}
+          </section>
         </section>
 
         <aside className="watch-secondary">
@@ -1184,6 +1729,16 @@ export default function Watch() {
             <>
               <div className="up-next-heading">
                 <h2>Up next</h2>
+                <button
+                  type="button"
+                  className={`up-next-autoplay ${autoplay ? 'active' : ''}`}
+                  role="switch"
+                  aria-checked={autoplay}
+                  onClick={() => setAutoplay((current) => !current)}
+                >
+                  <span>Autoplay</span>
+                  <i />
+                </button>
               </div>
 
               <div className="up-next-list">
