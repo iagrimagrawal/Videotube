@@ -17,6 +17,12 @@ import { symlink } from "fs";
 import { subscribe } from "diagnostics_channel";
 import mongoose from "mongoose";
 
+const cookieOptions = {
+    httpOnly:true,
+    secure:true,
+    sameSite:"none"
+}
+
 const generateAccessAndRefreshToken = async (userId) => {
     try{
         const user = await User.findById(userId);
@@ -114,16 +120,11 @@ const registerUser = asyncHandler(async (req,res)=>{
 
     const {accessToken,refreshToken} = await generateAccessAndRefreshToken(user._id);
 
-    const options = {
-        httpOnly:true,
-        secure:false,
-    }
-
     console.log("User controller successfull");
     
     return res.status(201)
-    .cookie("accessToken",accessToken,options)
-    .cookie("refreshToken",refreshToken,options)
+    .cookie("accessToken",accessToken,cookieOptions)
+    .cookie("refreshToken",refreshToken,cookieOptions)
     .json(
         new ApiResponse(200,{
             loginUser:createdUser,
@@ -169,14 +170,9 @@ const loginUser = asyncHandler(async (req,res)=>{
 
     const loggedInUser = await User.findById(loginUser._id).select("-password -refreshToken")
 
-    const options = {
-        httpOnly:true,
-        secure:false, // set to true in production
-    }
-
     return res.status(200)
-    .cookie("accessToken",accessToken,options)
-    .cookie("refreshToken",refreshToken,options)
+    .cookie("accessToken",accessToken,cookieOptions)
+    .cookie("refreshToken",refreshToken,cookieOptions)
     .json(
         new ApiResponse(200,{
             loginUser:loggedInUser,accessToken,refreshToken,
@@ -199,15 +195,10 @@ const logoutUser = asyncHandler(async (req,res)=>{
         }
     )
     
-    const options = {
-        httpOnly:true,
-        secure:true
-    }
-
     return res
     .status(200)
-    .clearCookie("accessToken",options)
-    .clearCookie("refreshToken",options)
+    .clearCookie("accessToken",cookieOptions)
+    .clearCookie("refreshToken",cookieOptions)
     .json(new ApiResponse(200,{},"User logout Successfull"))
 });
 
@@ -233,17 +224,12 @@ const refreshAccessToken = asyncHandler(async(req,res)=>{
             throw new ApiError(401,"Refresh Token is expired or used");
         }
     
-        const options = {
-            httpOnly:true,
-            secure:false
-        }
-    
         const { accessToken,refreshToken } = await generateAccessAndRefreshToken(user._id);
     
         return res
         .status(200)
-        .cookie("accessToken",accessToken,options)
-        .cookie("refreshToken",refreshToken,options)
+        .cookie("accessToken",accessToken,cookieOptions)
+        .cookie("refreshToken",refreshToken,cookieOptions)
         .json(
             new ApiResponse(200,{accessToken,refreshToken},"Access token refreshed")
         )
@@ -698,15 +684,10 @@ const deleteUserAccount = asyncHandler(async(req,res)=>{
         deleteFromCloudinary(getCloudinaryPublicIdFromUrl(user.coverImage))
     ]);
 
-    const options = {
-        httpOnly:true,
-        secure:true
-    }
-
     return res
     .status(200)
-    .clearCookie("accessToken",options)
-    .clearCookie("refreshToken",options)
+    .clearCookie("accessToken",cookieOptions)
+    .clearCookie("refreshToken",cookieOptions)
     .json(new ApiResponse(200,null,"User account deleted successfully"));
 
 });
