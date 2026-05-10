@@ -16,6 +16,8 @@ import PlaylistDetail from './pages/PlaylistDetail'
 import apiClient from './lib/api'
 import './App.css'
 
+const HEALTHCHECK_TIMEOUT_MS = 15000
+
 export default function App() {
   const { user, initAuth } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -29,7 +31,7 @@ export default function App() {
     setBackendStatus('checking')
 
     try {
-      await apiClient.get('/healthcheck', { timeout: 5000 })
+      await apiClient.get('/healthcheck', { timeout: HEALTHCHECK_TIMEOUT_MS })
       setBackendStatus('online')
     } catch (error) {
       console.error('Backend is not reachable:', error)

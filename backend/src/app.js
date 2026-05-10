@@ -3,11 +3,17 @@ import cors from "cors"
 import cookieParser from "cookie-parser"
 const app = express();
 
-const allowedOrigins = process.env.CORS_ORIGIN?.split(",").map((origin)=>origin.trim()).filter(Boolean) || [];
+const normalizeOrigin = (origin) => origin?.trim().replace(/\/$/, "");
+const allowedOrigins = process.env.CORS_ORIGIN
+    ?.split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean) || [];
+
+app.set("trust proxy", 1);
 
 app.use(cors({
     origin:(origin,callback)=>{
-        if(!origin || allowedOrigins.includes(origin)){
+        if(!origin || allowedOrigins.includes(normalizeOrigin(origin))){
             return callback(null,true);
         }
 
@@ -39,6 +45,14 @@ import dashboardRouter from './routes/dashboard.route.js'
 import healthcheckRouter from './routes/healthcheck.route.js'
 
 // routes declaration
+app.get("/", (req, res) => {
+    res.status(200).json({
+        status: "ok",
+        message: "VideoTube API is running",
+        healthcheck: "/api/v1/healthcheck"
+    });
+});
+
 app.use("/api/v1/healthcheck",healthcheckRouter);
 app.use("/healthcheck",healthcheckRouter);
 app.use("/api/v1/users",userRouter);
