@@ -1,65 +1,57 @@
-# 🎥 VideoTube
+# 🚀 VideoTube Backend
 
-A full-stack video sharing platform built using the MERN stack where users can upload videos, authenticate securely, manage profiles, and interact with content.
+Backend API for the VideoTube platform built using Node.js, Express.js, MongoDB, and JWT authentication.
 
----
-
-# 🚀 Features
-
-- User Authentication (JWT)
+This backend handles:
+- User Authentication
 - Access & Refresh Tokens
-- Video Uploads
-- Cloudinary Media Storage
-- User Profiles
-- Responsive Frontend
-- REST API Backend
-- MongoDB Database Integration
+- Video APIs
+- File Uploads
+- Cloudinary Integration
+- MongoDB Database Operations
 
 ---
 
 # 🛠️ Tech Stack
 
-## Frontend
-- React.js
-- Vite
-- Tailwind CSS
-- Axios
-
-## Backend
 - Node.js
 - Express.js
 - MongoDB
 - Mongoose
 - JWT Authentication
 - Cloudinary
+- Multer
+- Bcrypt
+- Cookie Parser
 
 ---
 
-# 📂 Project Structure
+# 📂 Folder Structure
 
 ```text
-videotube/
+backend/
 │
-├── backend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   ├── .env.example
+├── public/
+├── src/
+│   ├── controllers/
+│   ├── db/
+│   ├── middlewares/
+│   ├── models/
+│   ├── routes/
+│   ├── utils/
+│   ├── app.js
+│   └── index.js
 │
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│
-├── README.md
-└── .gitignore
+├── package.json
+├── .env.example
+└── README.md
 ```
 
 ---
 
 # ⚙️ Installation
 
-## 1️⃣ Clone the repository
+## 1️⃣ Clone Repository
 
 ```bash
 git clone https://github.com/yourusername/videotube.git
@@ -67,25 +59,15 @@ git clone https://github.com/yourusername/videotube.git
 
 ---
 
-## 2️⃣ Move into the project directory
+## 2️⃣ Move to backend folder
 
 ```bash
-cd videotube
+cd videotube/backend
 ```
 
 ---
 
-# 🔧 Backend Setup
-
-## 1️⃣ Go to backend folder
-
-```bash
-cd backend
-```
-
----
-
-## 2️⃣ Install dependencies
+## 3️⃣ Install dependencies
 
 ```bash
 npm install
@@ -99,16 +81,16 @@ npm install --force
 
 ---
 
-## 3️⃣ Create `.env` file
+# ☁️ Environment Variables
 
-Create a `.env` file inside the `backend` folder and add:
+Create a `.env` file inside the backend folder and add:
 
 ```env
-PORT=
+PORT=8000
 
 MONGODB_URL=
 
-CORS_ORIGIN=
+CORS_ORIGIN=http://localhost:5173
 
 ACCESS_TOKEN_SECRET=
 ACCESS_TOKEN_EXPIRY=1d
@@ -123,10 +105,20 @@ CLOUDINARY_API_SECRET=
 
 ---
 
-## 4️⃣ Run backend server
+# ▶️ Run Backend Server
+
+## Development Mode
 
 ```bash
 npm run dev
+```
+
+---
+
+## Production Mode
+
+```bash
+npm start
 ```
 
 Backend will start on:
@@ -137,102 +129,100 @@ http://localhost:8000
 
 ---
 
-# 💻 Frontend Setup
+# 🔐 Authentication
 
-## 1️⃣ Open a new terminal
-
-Move to frontend folder:
-
-```bash
-cd frontend
-```
+This backend uses:
+- JWT Access Tokens
+- Refresh Tokens
+- HTTP-only Cookies
 
 ---
 
-## 2️⃣ Install dependencies
+# 📦 API Features
 
-```bash
-npm install
-```
-
----
-
-## 3️⃣ Run frontend
-
-```bash
-npm run dev
-```
-
-Frontend will start on:
-
-```text
-http://localhost:5173
-```
+- User Registration
+- User Login
+- Logout
+- Refresh Access Token
+- Video Upload
+- Video Fetching
+- User Profile Management
 
 ---
 
-# ☁️ Environment Variables
+# 📁 File Uploads
 
-| Variable | Description |
-|----------|-------------|
-| PORT | Server Port |
-| MONGODB_URL | MongoDB Connection String |
-| CORS_ORIGIN | Frontend URL |
-| ACCESS_TOKEN_SECRET | JWT Access Token Secret |
-| REFRESH_TOKEN_SECRET | JWT Refresh Token Secret |
-| CLOUDINARY_CLOUD_NAME | Cloudinary Cloud Name |
-| CLOUDINARY_API_KEY | Cloudinary API Key |
-| CLOUDINARY_API_SECRET | Cloudinary API Secret |
+Media uploads are handled using:
+- Multer
+- Cloudinary Storage
 
 ---
 
-# 🔐 Security Notes
+# 🧪 Available Scripts
 
-- Never upload `.env` file to GitHub
-- Keep API keys private
-- Rotate secrets if exposed publicly
-
----
-
-# 🧪 Scripts
-
-## Backend
+## Start Development Server
 
 ```bash
 npm run dev
+```
+
+---
+
+## Start Production Server
+
+```bash
 npm start
 ```
 
-## Frontend
+---
 
-```bash
-npm run dev
-npm run build
+# 🌍 API Base URL
+
+```text
+http://localhost:8000/api/v1
 ```
 
 ---
 
+# 🔒 Security Notes
+
+- Never upload `.env`
+- Keep JWT secrets private
+- Use HTTPS in production
+- Rotate secrets if exposed
+
 ---
 
-# 🌍 Deployment
+# 📸 API Testing
 
-You can deploy:
+You can test APIs using:
+- Postman
+- Thunder Client
+- Insomnia
 
-- Frontend → Vercel / Netlify
-- Backend → Render / Railway
-- Database → MongoDB Atlas
+---
+
+# ☁️ Deployment
+
+Backend can be deployed on:
+- Render
+- Railway
+- Cyclic
+- AWS
+- DigitalOcean
+
+Database:
+- MongoDB Atlas
 
 ---
 
 # 🤝 Contributing
 
-Contributions are welcome.
-
 1. Fork the repository
-2. Create a new branch
-3. Commit your changes
-4. Push the branch
-5. Open a Pull Request
+2. Create a feature branch
+3. Commit changes
+4. Push branch
+5. Open Pull Request
 
 ---
 
